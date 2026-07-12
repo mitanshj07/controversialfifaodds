@@ -25,11 +25,11 @@
     "react-dom": "^19.1.0",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vite-plugin-node-polyfills": "^0.28.0"
   },
   "devDependencies": {
-    "concurrently": "^9.2.0",
-    "vite-plugin-node-polyfills": "^0.28.0"
+    "concurrently": "^9.2.0"
   },
   "engines": {
     "node": ">=20"
