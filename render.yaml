@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: controversialfifaodds
+    runtime: node
+    repo: https://github.com/mitanshj07/controversialfifaodds
+    branch: main
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
