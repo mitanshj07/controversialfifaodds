@@ -9,9 +9,12 @@ import { ContestManager } from './domain/contest-manager.js';
 import { RoomError } from './domain/room-session.js';
 import { RoomManager } from './domain/room-manager.js';
 import { DEMO_EVENTS, DEMO_JURORS, DEMO_MATCH } from './match-script.js';
+import { Connection, PublicKey } from '@solana/web3.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PORT = 3001;
+export const TREASURY_WALLET = new PublicKey('6MS566y46t3C37p7TnnK7yieoSbLimWEwwKemXxFMJ5A');
+const solanaConnection = new Connection('https://api.devnet.solana.com');
 
 const finitePlaybackRate = (value) => {
   const parsed = Number(value);
@@ -128,7 +131,47 @@ export function createTheCallServer({
     io.emit('contest:updated', { contestId, type });
   });
 
+  const PACKAGES = {
+    'pack_1': { priceLamports: 100_000_000, credits: 5000 },
+    'pack_2': { priceLamports: 500_000_000, credits: 30000 },
+  };
+
   io.on('connection', (socket) => {
+    socket.on('wallet:buy_points', async (payload = {}, acknowledge = () => {}) => {
+      try {
+        const { signature, packageId, participantId, resumeToken } = payload;
+        const pack = PACKAGES[packageId];
+        if (!pack) throw new Error('Invalid package ID.');
+        
+        // Wait briefly for confirmation if needed (frontend should wait, but just in case)
+        const tx = await solanaConnection.getParsedTransaction(signature, { maxSupportedTransactionVersion: 0 });
+        if (!tx) throw new Error('Transaction not found or not confirmed yet.');
+        if (tx.meta?.err) throw new Error('Transaction failed on-chain.');
+
+        // Verify transfer instruction
+        const instructions = tx.transaction.message.instructions;
+        const isValidTransfer = instructions.some((ix) => {
+          return ix.program === 'system' && 
+                 ix.parsed?.type === 'transfer' && 
+                 ix.parsed?.info?.destination === TREASURY_WALLET.toBase58() &&
+                 ix.parsed?.info?.lamports >= pack.priceLamports;
+        });
+
+        if (!isValidTransfer) throw new Error('Invalid transfer details.');
+
+        const result = contests.buyPoints({
+          participantId,
+          resumeToken,
+          amountCredits: pack.credits,
+          transactionId: signature,
+        });
+
+        acknowledge({ ok: true, ...result });
+      } catch (error) {
+        acknowledge(clientError(error));
+      }
+    });
+
     socket.on('contest:session', (payload = {}, acknowledge = () => {}) => {
       try {
         const result = contests.session(payload);

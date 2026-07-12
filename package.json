@@ -14,7 +14,12 @@
     "check": "npm run test && npm run build"
   },
   "dependencies": {
+    "@solana/wallet-adapter-react": "^0.15.39",
+    "@solana/wallet-adapter-react-ui": "^0.9.39",
+    "@solana/wallet-adapter-wallets": "^0.19.38",
+    "@solana/web3.js": "^1.98.4",
     "@vitejs/plugin-react": "^4.6.0",
+    "bs58": "^6.0.0",
     "express": "^5.1.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -23,7 +28,8 @@
     "vite": "^7.0.4"
   },
   "devDependencies": {
-    "concurrently": "^9.2.0"
+    "concurrently": "^9.2.0",
+    "vite-plugin-node-polyfills": "^0.28.0"
   },
   "engines": {
     "node": ">=20"

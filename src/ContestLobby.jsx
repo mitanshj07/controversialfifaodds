@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useConnection, useWallet } from '@solana/wallet-adapter-react';
+import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 
 export const FALLBACK_CONTESTS = [
   {
@@ -217,6 +219,75 @@ function JoinContestSheet({ contest, balance, pending, error, now, onClose, onCo
   );
 }
 
+function BuyPointsDialog({ open, onClose, onBuy }) {
+  const { connection } = useConnection();
+  const { publicKey, sendTransaction } = useWallet();
+  const dialogRef = useDialogFocus(open, onClose);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+
+  if (!open) return null;
+
+  const TREASURY_WALLET = new PublicKey('6MS566y46t3C37p7TnnK7yieoSbLimWEwwKemXxFMJ5A');
+  const PACKAGES = [
+    { id: 'pack_1', sol: 0.1, lamports: 100_000_000, credits: 5000 },
+    { id: 'pack_2', sol: 0.5, lamports: 500_000_000, credits: 30000 },
+  ];
+
+  const buyPackage = async (pack) => {
+    if (!publicKey) return setError('Connect your wallet first.');
+    setPending(true);
+    setError('');
+    try {
+      const transaction = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: publicKey,
+          toPubkey: TREASURY_WALLET,
+          lamports: pack.lamports,
+        })
+      );
+      const signature = await sendTransaction(transaction, connection);
+      // Wait for it to hit the network
+      await new Promise(r => setTimeout(r, 1500));
+      
+      const res = await onBuy(signature, pack.id);
+      if (!res?.ok) throw new Error(res?.error || 'Server rejected purchase');
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Transaction failed');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <div className="dialog-scrim" onClick={onClose}>
+      <dialog open className="dialog-content" ref={dialogRef} onClick={(e) => e.stopPropagation()}>
+        <div className="dialog-header">
+          <h2>Purchase Points</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="close-button">×</button>
+        </div>
+        <div className="dialog-body">
+          <p>Buy points to enter larger contests. Requires Devnet SOL.</p>
+          {error && <p className="form-error">⚠ {error}</p>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1.5rem' }}>
+            {PACKAGES.map((p) => (
+              <button 
+                key={p.id} 
+                className="primary-button" 
+                disabled={pending || !publicKey}
+                onClick={() => buyPackage(p)}
+              >
+                {pending ? "Processing..." : `Buy ${credits(p.credits)} for ${p.sol} SOL`}
+              </button>
+            ))}
+          </div>
+        </div>
+      </dialog>
+    </div>
+  );
+}
+
 function PrivateRoomPanel({ creationClosed, onCreateOpen, onLookup, lookupPending, lookupError }) {
   const [code, setCode] = useState("");
   return (
@@ -291,6 +362,7 @@ export default function ContestLobby({
   onCreateContest,
   onLookupPrivate,
   onEnterLive,
+  onBuyPoints,
 }) {
   const [tab, setTab] = useState("public");
   const [selected, setSelected] = useState(null);
@@ -302,6 +374,7 @@ export default function ContestLobby({
   const [lookupPending, setLookupPending] = useState(false);
   const [lookupError, setLookupError] = useState("");
   const [balanceOpen, setBalanceOpen] = useState(false);
+  const [buyPointsOpen, setBuyPointsOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
   const balance = wallet?.balanceCredits ?? 1000;
   const firstJoinedContest = contests.find((contest) => contest.membership?.joined === true || contest.joined === true);
@@ -371,8 +444,13 @@ export default function ContestLobby({
       <header className="lobby-header">
         <div className="lobby-brand"><LobbyMark /><div><strong>THE CALL</strong><small>CONTESTS</small></div></div>
         <span className={`lobby-connection ${connected ? "is-live" : ""}`}><i />{connected ? "LIVE" : "OFFLINE"}</span>
-        <button className="balance-pill" type="button" onClick={() => setBalanceOpen(true)}><small>DEMO BALANCE</small><strong>{credits(balance)}</strong></button>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <button className="balance-pill" type="button" onClick={() => setBuyPointsOpen(true)} style={{ background: "#4caf50", color: "#fff" }}><small>GET</small><strong>POINTS</strong></button>
+          <button className="balance-pill" type="button" onClick={() => setBalanceOpen(true)}><small>BALANCE</small><strong>{credits(balance)}</strong></button>
+        </div>
       </header>
+
+      <BuyPointsDialog open={buyPointsOpen} onClose={() => setBuyPointsOpen(false)} onBuy={onBuyPoints} />
 
       <div className="practice-strip"><strong>PRACTICE MODE</strong><span>Entry credits and rewards marked DC have no cash value.</span></div>
 

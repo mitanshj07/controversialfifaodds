@@ -145,15 +145,18 @@ function Header({ roomCode, connected, muted, onToggleMute }) {
   );
 }
 
+import { useWallet } from '@solana/wallet-adapter-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+
 function JoinGate({ open, connected, error, onJoin }) {
-  const [nickname, setNickname] = useState("");
+  const { publicKey } = useWallet();
 
   if (!open) return null;
 
   const submit = (event) => {
     event.preventDefault();
-    if (!nickname.trim()) return;
-    onJoin({ nickname: nickname.trim(), roomCode: "JURY12" });
+    if (!publicKey) return;
+    onJoin({ nickname: publicKey.toBase58().slice(0, 8), roomCode: "JURY12" });
   };
 
   return (
@@ -166,23 +169,16 @@ function JoinGate({ open, connected, error, onJoin }) {
         <span className="giant-question">?</span>
       </div>
       <section className="join-card" aria-labelledby="join-title">
-        <div className="eyebrow"><span>Live</span> No wallet · no money · just calls</div>
+        <div className="eyebrow"><span>Live</span> Connect your wallet to play</div>
         <h1 id="join-title">The ref has<br />a screen.<br />Now you do.</h1>
-        <p className="join-copy">Pick a name. Enter the room. When a big decision drops, you've got seconds to call it before the officials do. Get it right, climb the board.</p>
+        <p className="join-copy">Connect your Solana wallet. When a big decision drops, you've got seconds to call it before the officials do. Get it right, climb the board.</p>
 
-        <form onSubmit={submit}>
-          <label>
-            Matchday name
-            <input
-              autoFocus
-              maxLength={20}
-              placeholder="e.g. Left Wing Maya"
-              value={nickname}
-              onChange={(event) => setNickname(event.target.value)}
-            />
-          </label>
+        <form onSubmit={submit} className="solana-gate-form">
+          <div style={{ marginBottom: "1.5rem" }}>
+            <WalletMultiButton />
+          </div>
           {error ? <p className="form-error">⚠ {error}</p> : null}
-          <button className="primary-button" type="submit" disabled={!connected || !nickname.trim()}>
+          <button className="primary-button" type="submit" disabled={!connected || !publicKey}>
             {connected ? "Enter the jury" : "Connecting…"}
             <span aria-hidden="true">→</span>
           </button>
@@ -645,6 +641,19 @@ export default function App() {
     return response;
   };
 
+  const buyPoints = async (signature, packageId) => {
+    const response = await socketRequest(socketRef.current, "wallet:buy_points", {
+      signature,
+      packageId,
+      participantId: session?.participantId,
+      resumeToken: session?.resumeToken,
+    });
+    if (response.ok) {
+      if (response.wallet) setWallet(response.wallet);
+    }
+    return response;
+  };
+
   const backToLobby = async () => {
     setScreen("lobby");
     await refreshContests();
@@ -664,6 +673,7 @@ export default function App() {
           onCreateContest={createContest}
           onLookupPrivate={lookupPrivateContest}
           onEnterLive={enterLiveContest}
+          onBuyPoints={buyPoints}
         />
       ) : <div className={`app-shell ${!joined ? "is-obscured" : ""}`}>
         <Header roomCode={roomState.roomCode} connected={connected} muted={muted} onToggleMute={() => setMuted((value) => !value)} />

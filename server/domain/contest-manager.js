@@ -209,6 +209,24 @@ export class ContestManager extends EventEmitter {
     };
   }
 
+  buyPoints({ participantId, resumeToken, amountCredits, transactionId }) {
+    const account = this.authenticate({ participantId, resumeToken });
+    if (account.transactions.some((t) => t.id === transactionId)) {
+      throw new ContestError('DUPLICATE_TRANSACTION', 'This purchase has already been credited.');
+    }
+    account.balanceCredits += amountCredits;
+    account.transactions.push({
+      id: transactionId,
+      type: 'purchase_credits',
+      amountCredits,
+      at: this.now(),
+    });
+    return {
+      session: this.#sessionSnapshot(account),
+      wallet: this.walletSnapshot(account),
+    };
+  }
+
   lookup({ inviteCode, participantId, resumeToken } = {}) {
     const code = normalizedInviteCode(inviteCode);
     const contestId = this.inviteCodes.get(code);
