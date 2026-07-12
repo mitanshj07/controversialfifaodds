@@ -15,6 +15,14 @@ Socket events:
 - `replay:restart` `{}`
 - server broadcasts `contest:updated`, `room:state`, `call:opened`, `call:settled`, and `replay:restarted`
 
+`GET /api/live-matches` is the server-side TxOdds fixture discovery endpoint
+used by the separate Live Matches lobby section. It returns normalized fixture
+cards without exposing TxOdds credentials to the browser. Configure
+`TXODDS_FIXTURES_URL` with the live fixture endpoint supplied by your TxOdds
+subscription; optional `TXODDS_USER_ID`, `TXODDS_PASSWORD`, JWT, and API-token
+values remain server-side. When the URL is absent, the endpoint returns an
+explicit unconfigured state rather than inventing demo fixtures.
+
 ## Contest contract
 
 All balances, entry fees, prize pools, and rewards are **non-cash test credits**.

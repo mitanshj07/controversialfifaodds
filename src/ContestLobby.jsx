@@ -289,6 +289,47 @@ function BuyPointsDialog({ open, onClose, onBuy }) {
   );
 }
 
+function LiveMatchesPanel({ data = {}, onRefresh }) {
+  const matches = Array.isArray(data.matches) ? data.matches : [];
+  const lastUpdated = data.fetchedAt ? new Date(data.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+
+  return (
+    <section id="contest-panel-live" className="live-matches-panel" role="tabpanel" aria-labelledby="contest-tab-live">
+      <div className="live-matches-heading">
+        <div><span className="section-kicker">PRIMARY FEED · TXODDS</span><h2>Live matches</h2><p>Live fixture discovery stays server-side. No mock cards are mixed into this board.</p></div>
+        <button type="button" className="live-refresh-button" onClick={onRefresh} disabled={data.loading}>{data.loading ? "UPDATING…" : "REFRESH ↻"}</button>
+      </div>
+
+      {data.error ? <p className="contest-error" role="alert">{data.error}</p> : null}
+      {!data.configured ? (
+        <div className="live-empty-state">
+          <span className="mode-label">TXODDS NOT CONFIGURED</span>
+          <h3>Connect the fixture feed.</h3>
+          <p>Set <code>TXODDS_FIXTURES_URL</code> on the server to the live fixture endpoint supplied with your TxOdds subscription. Credentials never belong in the browser.</p>
+        </div>
+      ) : matches.length === 0 ? (
+        <div className="live-empty-state">
+          <span className="mode-label">TXODDS LIVE</span>
+          <h3>No live fixtures right now.</h3>
+          <p>The feed is configured, but it returned no fixtures for the current live window. Refresh when a match is in-running.</p>
+        </div>
+      ) : (
+        <div className="live-match-grid">
+          {matches.map((match) => (
+            <article className="live-match-card" key={match.id}>
+              <div className="live-match-card-head"><span className={match.live ? "live-state" : "scheduled-state"}>{match.live ? "LIVE NOW" : match.status?.toUpperCase() || "SCHEDULED"}</span><small>FIXTURE {match.id}</small></div>
+              <p className="live-competition">{match.competition || "TxOdds fixture"}</p>
+              <div className="live-teams"><strong>{match.home}</strong><b>{match.homeScore ?? "—"}</b><span>–</span><b>{match.awayScore ?? "—"}</b><strong>{match.away}</strong></div>
+              <div className="live-match-meta"><span>{match.live && match.minute !== null ? `${match.minute}′` : match.startTime ? new Date(match.startTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : "Awaiting clock"}</span><span>TXODDS PRIMARY</span></div>
+            </article>
+          ))}
+        </div>
+      )}
+      <footer className="live-matches-footer">{lastUpdated ? `Last server refresh ${lastUpdated}` : "Waiting for first server refresh"} · TxOdds credentials stay server-side</footer>
+    </section>
+  );
+}
+
 function PrivateRoomPanel({ creationClosed, onCreateOpen, onLookup, lookupPending, lookupError }) {
   const [code, setCode] = useState("");
   return (
@@ -364,6 +405,8 @@ export default function ContestLobby({
   onLookupPrivate,
   onEnterLive,
   onBuyPoints,
+  liveMatches,
+  onRefreshLiveMatches,
 }) {
   const [tab, setTab] = useState("public");
   const [selected, setSelected] = useState(null);
@@ -378,7 +421,6 @@ export default function ContestLobby({
   const [buyPointsOpen, setBuyPointsOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
   const balance = wallet?.balanceCredits ?? 1000;
-  const firstJoinedContest = contests.find((contest) => contest.membership?.joined === true || contest.joined === true);
   const sharedEntryClosesAt = contests.find((contest) => contest.entryClosesAt)?.entryClosesAt;
   const sharedRemainingMs = sharedEntryClosesAt ? Math.max(0, new Date(sharedEntryClosesAt).getTime() - now) : null;
   const sharedClock = sharedRemainingMs === null ? null : `${String(Math.floor(sharedRemainingMs / 60_000)).padStart(2, "0")}:${String(Math.floor((sharedRemainingMs % 60_000) / 1000)).padStart(2, "0")}`;
@@ -465,11 +507,14 @@ export default function ContestLobby({
 
         <nav className="contest-tabs" aria-label="Contest categories" role="tablist">
           <button id="contest-tab-public" role="tab" aria-selected={tab === "public"} aria-controls="contest-panel-public" className={tab === "public" ? "is-active" : ""} type="button" onClick={() => setTab("public")}>PUBLIC</button>
+          <button id="contest-tab-live" role="tab" aria-selected={tab === "live"} aria-controls="contest-panel-live" className={tab === "live" ? "is-active" : ""} type="button" onClick={() => setTab("live")}>LIVE MATCHES</button>
           <button id="contest-tab-private" role="tab" aria-selected={tab === "private"} aria-controls="contest-panel-private" className={tab === "private" ? "is-active" : ""} type="button" onClick={() => setTab("private")}>PRIVATE</button>
           <button id="contest-tab-mine" role="tab" aria-selected={tab === "mine"} aria-controls="contest-panel-mine" className={tab === "mine" ? "is-active" : ""} type="button" onClick={() => setTab("mine")}>MY ENTRIES</button>
         </nav>
 
-        {tab === "private" ? (
+        {tab === "live" ? (
+          <LiveMatchesPanel data={liveMatches} onRefresh={onRefreshLiveMatches} />
+        ) : tab === "private" ? (
           <div id="contest-panel-private" role="tabpanel" aria-labelledby="contest-tab-private"><PrivateRoomPanel creationClosed={matchStatus !== "OPEN"} onCreateOpen={() => setCreateOpen(true)} onLookup={lookup} lookupPending={lookupPending} lookupError={lookupError} /></div>
         ) : (
           <section id={`contest-panel-${tab}`} role="tabpanel" aria-labelledby={`contest-tab-${tab}`} className="contest-list" aria-label={tab === "mine" ? "My contests" : "Public contests"}>
@@ -481,7 +526,7 @@ export default function ContestLobby({
 
       <nav className="mobile-nav" aria-label="Main navigation">
         <button className={tab === "public" ? "is-active" : ""} type="button" onClick={() => setTab("public")}><i>⌂</i>LOBBY</button>
-        <button type="button" disabled={!firstJoinedContest} onClick={() => enterRoom(firstJoinedContest)}><i>●</i>LIVE</button>
+        <button className={tab === "live" ? "is-active" : ""} type="button" onClick={() => setTab("live")}><i>●</i>LIVE</button>
         <button className={tab === "mine" ? "is-active" : ""} type="button" onClick={() => setTab("mine")}><i>≡</i>MY CONTESTS</button>
         <button type="button" onClick={() => setBalanceOpen(true)}><i>◎</i>PROFILE</button>
       </nav>

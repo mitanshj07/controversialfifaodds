@@ -428,6 +428,7 @@ export default function App() {
   const [screen, setScreen] = useState("lobby");
   const [contests, setContests] = useState(FALLBACK_CONTESTS);
   const [wallet, setWallet] = useState({ balanceCredits: 1000, currency: "TEST_CREDITS", isWithdrawable: false });
+  const [liveMatches, setLiveMatches] = useState({ configured: false, matches: [], loading: false, error: null, fetchedAt: null });
   const [activeContest, setActiveContest] = useState(null);
   const activeCallId = roomState.activeCall?.id;
 
@@ -494,6 +495,41 @@ export default function App() {
     const serverVote = currentParticipant?.vote || currentParticipant?.currentVote;
     if (serverVote) setCurrentVote(serverVote);
   }, [currentParticipant]);
+
+  useEffect(() => {
+    if (!joined) return undefined;
+    let cancelled = false;
+    const refresh = async () => {
+      setLiveMatches((current) => ({ ...current, loading: true, error: null }));
+      try {
+        const response = await fetch(`${SERVER_URL || ""}/api/live-matches`);
+        const payload = await response.json();
+        if (!response.ok || payload.ok === false) throw new Error(payload.error || payload.message || "TxOdds live fixtures are unavailable.");
+        if (!cancelled) setLiveMatches({ ...payload, loading: false, error: null });
+      } catch (error) {
+        if (!cancelled) setLiveMatches((current) => ({ ...current, loading: false, error: error.message }));
+      }
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [joined]);
+
+  const refreshLiveMatches = async () => {
+    try {
+      const response = await fetch(`${SERVER_URL || ""}/api/live-matches?refresh=1`);
+      const payload = await response.json();
+      if (!response.ok || payload.ok === false) throw new Error(payload.error || payload.message || "TxOdds live fixtures are unavailable.");
+      setLiveMatches({ ...payload, loading: false, error: null });
+      return payload;
+    } catch (error) {
+      setLiveMatches((current) => ({ ...current, loading: false, error: error.message }));
+      return { ok: false, error: error.message };
+    }
+  };
 
   const join = ({ nickname, walletAddress, roomCode }) => {
     setJoinError("");
@@ -676,6 +712,8 @@ export default function App() {
           onLookupPrivate={lookupPrivateContest}
           onEnterLive={enterLiveContest}
           onBuyPoints={buyPoints}
+          liveMatches={liveMatches}
+          onRefreshLiveMatches={refreshLiveMatches}
         />
       ) : <div className={`app-shell ${!joined ? "is-obscured" : ""}`}>
         <Header roomCode={roomState.roomCode} connected={connected} muted={muted} onToggleMute={() => setMuted((value) => !value)} />

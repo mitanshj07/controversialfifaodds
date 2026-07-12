@@ -9,6 +9,7 @@ import { ContestError, ContestManager } from './domain/contest-manager.js';
 import { RoomError } from './domain/room-session.js';
 import { RoomManager } from './domain/room-manager.js';
 import { DEMO_EVENTS, DEMO_JURORS, DEMO_MATCH } from './match-script.js';
+import { TxOddsLiveService } from './services/txodds-live-service.js';
 import { Connection, PublicKey } from '@solana/web3.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -102,6 +103,7 @@ export function createTheCallServer({
     }),
   });
   const contests = new ContestManager({ match: DEMO_MATCH, entryWindowMs });
+  const txOddsLive = new TxOddsLiveService();
   const solanaConnection = new Connection(solanaRpcUrl, 'confirmed');
   const treasuryPublicKey = new PublicKey(treasuryWallet);
 
@@ -122,6 +124,7 @@ export function createTheCallServer({
     replay: { source: 'scripted', playbackRate },
     contests: { entryWindowMs: contests.entryWindowMs },
     solana: { network: solanaNetwork, treasuryWallet: treasuryPublicKey.toBase58() },
+    txodds: { configured: txOddsLive.configured },
     ...manager.health(),
   });
   app.get('/health', health);
@@ -136,6 +139,10 @@ export function createTheCallServer({
     } catch (error) {
       return response.status(400).json(clientError(error));
     }
+  });
+  app.get('/api/live-matches', async (request, response) => {
+    const result = await txOddsLive.list({ force: request.query.refresh === '1' });
+    return response.json({ ok: !result.error, ...result });
   });
   app.get('/api/rooms/:roomCode', (request, response) => {
     try {
