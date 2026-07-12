@@ -33,6 +33,14 @@ const cleanNickname = (value) => {
   return nickname;
 };
 
+const cleanWalletAddress = (value) => {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string' || value.length < 32 || value.length > 44 || /\s/.test(value)) {
+    throw new ContestError('INVALID_WALLET', 'Connect a valid Solana wallet before continuing.');
+  }
+  return value;
+};
+
 const cleanContestName = (value) => {
   if (typeof value !== 'string') {
     throw new ContestError('INVALID_CONTEST_NAME', 'Enter a name for the private contest.');
@@ -197,8 +205,8 @@ export class ContestManager extends EventEmitter {
     };
   }
 
-  session({ nickname, participantId, resumeToken } = {}) {
-    const account = this.#resolveOrCreateAccount({ nickname, participantId, resumeToken });
+  session({ nickname, participantId, resumeToken, walletAddress } = {}) {
+    const account = this.#resolveOrCreateAccount({ nickname, participantId, resumeToken, walletAddress });
     return {
       session: this.#sessionSnapshot(account),
       wallet: this.walletSnapshot(account),
@@ -209,8 +217,18 @@ export class ContestManager extends EventEmitter {
     };
   }
 
-  buyPoints({ participantId, resumeToken, amountCredits, transactionId }) {
+  buyPoints({ participantId, resumeToken, walletAddress, amountCredits, transactionId }) {
     const account = this.authenticate({ participantId, resumeToken });
+    const cleanWallet = cleanWalletAddress(walletAddress);
+    if (!cleanWallet || account.walletAddress !== cleanWallet) {
+      throw new ContestError('WALLET_MISMATCH', 'Reconnect the wallet used to open this demo account.');
+    }
+    if (!Number.isInteger(amountCredits) || amountCredits <= 0) {
+      throw new ContestError('INVALID_CREDIT_AMOUNT', 'The credit package amount is invalid.');
+    }
+    if (typeof transactionId !== 'string' || transactionId.length < 80) {
+      throw new ContestError('INVALID_PAYMENT', 'The Solana transaction signature is invalid.');
+    }
     if (account.transactions.some((t) => t.id === transactionId)) {
       throw new ContestError('DUPLICATE_TRANSACTION', 'This purchase has already been credited.');
     }
@@ -458,9 +476,14 @@ export class ContestManager extends EventEmitter {
     };
   }
 
-  #resolveOrCreateAccount({ nickname, participantId, resumeToken }) {
+  #resolveOrCreateAccount({ nickname, participantId, resumeToken, walletAddress }) {
+    const cleanWallet = cleanWalletAddress(walletAddress);
     if (participantId || resumeToken) {
       const account = this.authenticate({ participantId, resumeToken });
+      if (cleanWallet && account.walletAddress && account.walletAddress !== cleanWallet) {
+        throw new ContestError('WALLET_MISMATCH', 'Reconnect the wallet used to open this demo account.');
+      }
+      if (cleanWallet && !account.walletAddress) account.walletAddress = cleanWallet;
       if (nickname !== undefined) account.nickname = cleanNickname(nickname);
       return account;
     }
@@ -469,6 +492,7 @@ export class ContestManager extends EventEmitter {
       id,
       resumeToken: this.tokenFactory(),
       nickname: cleanNickname(nickname),
+      walletAddress: cleanWallet,
       balanceCredits: this.startingBalanceCredits,
       contestIds: new Set(),
       transactions: [],
@@ -713,6 +737,7 @@ export class ContestManager extends EventEmitter {
       participantId: account.id,
       resumeToken: account.resumeToken,
       nickname: account.nickname,
+      ...(account.walletAddress ? { walletAddress: account.walletAddress } : {}),
     };
   }
 

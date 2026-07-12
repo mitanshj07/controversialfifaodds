@@ -45,6 +45,7 @@ export const FALLBACK_CONTESTS = [
 ];
 
 const credits = (value) => `${Number(value || 0).toLocaleString()} DC`;
+const SOLANA_TREASURY_WALLET = import.meta.env.VITE_SOLANA_TREASURY_WALLET || '6MS566y46t3C37p7TnnK7yieoSbLimWEwwKemXxFMJ5A';
 
 function useDialogFocus(open, onClose) {
   const dialogRef = useRef(null);
@@ -228,7 +229,7 @@ function BuyPointsDialog({ open, onClose, onBuy }) {
 
   if (!open) return null;
 
-  const TREASURY_WALLET = new PublicKey('6MS566y46t3C37p7TnnK7yieoSbLimWEwwKemXxFMJ5A');
+  const TREASURY_WALLET = new PublicKey(SOLANA_TREASURY_WALLET);
   const PACKAGES = [
     { id: 'pack_1', sol: 0.1, lamports: 100_000_000, credits: 5000 },
     { id: 'pack_2', sol: 0.5, lamports: 500_000_000, credits: 30000 },
@@ -246,10 +247,8 @@ function BuyPointsDialog({ open, onClose, onBuy }) {
           lamports: pack.lamports,
         })
       );
-      const signature = await sendTransaction(transaction, connection);
-      // Wait for it to hit the network
-      await new Promise(r => setTimeout(r, 1500));
-      
+      const signature = await sendTransaction(transaction, connection, { preflightCommitment: 'confirmed' });
+      await connection.confirmTransaction(signature, 'confirmed');
       const res = await onBuy(signature, pack.id);
       if (!res?.ok) throw new Error(res?.error || 'Server rejected purchase');
       onClose();
@@ -261,15 +260,17 @@ function BuyPointsDialog({ open, onClose, onBuy }) {
   };
 
   return (
-    <div className="dialog-scrim" onClick={onClose}>
+    <div className="dialog-scrim" onMouseDown={(event) => event.target === event.currentTarget && !pending && onClose()}>
       <dialog open className="dialog-content" ref={dialogRef} onClick={(e) => e.stopPropagation()}>
         <div className="dialog-header">
           <h2>Purchase Points</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="close-button">×</button>
         </div>
         <div className="dialog-body">
-          <p>Buy points to enter larger contests. Requires Devnet SOL.</p>
-          {error && <p className="form-error">⚠ {error}</p>}
+          <p>Get Demo Credits using Devnet SOL. These points have no cash value and cannot be withdrawn or redeemed.</p>
+          <p className="wallet-network-note">Network: DEVNET · Wallet: {publicKey ? `${publicKey.toBase58().slice(0, 4)}…${publicKey.toBase58().slice(-4)}` : 'not connected'}</p>
+          <p><a href="https://faucet.solana.com/" target="_blank" rel="noreferrer">Get free Devnet SOL from the Solana faucet ↗</a></p>
+          {error && <p className="form-error" role="alert">⚠ {error}</p>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1.5rem' }}>
             {PACKAGES.map((p) => (
               <button 
@@ -278,7 +279,7 @@ function BuyPointsDialog({ open, onClose, onBuy }) {
                 disabled={pending || !publicKey}
                 onClick={() => buyPackage(p)}
               >
-                {pending ? "Processing..." : `Buy ${credits(p.credits)} for ${p.sol} SOL`}
+                {pending ? "Confirming on Devnet…" : `Get ${credits(p.credits)} for ${p.sol} Devnet SOL`}
               </button>
             ))}
           </div>

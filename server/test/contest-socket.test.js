@@ -2,10 +2,48 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import test from 'node:test';
 import { io as connectSocket } from 'socket.io-client';
-import { createTheCallServer } from '../index.js';
+import { createTheCallServer, verifySolanaDevnetTransfer } from '../index.js';
 
 const emitAck = (socket, event, payload = {}) => new Promise((resolve) => {
   socket.emit(event, payload, resolve);
+});
+
+test('accepts only an exact confirmed Devnet SOL transfer from the connected wallet', async () => {
+  const buyer = '11111111111111111111111111111111';
+  const treasury = '22222222222222222222222222222222';
+  const validTransaction = {
+    meta: { err: null },
+    transaction: {
+      message: {
+        accountKeys: [{ pubkey: buyer, signer: true }],
+        instructions: [{
+          program: 'system',
+          parsed: {
+            type: 'transfer',
+            info: { source: buyer, destination: treasury, lamports: 100 },
+          },
+        }],
+      },
+    },
+  };
+  const connection = { getParsedTransaction: async () => validTransaction };
+  await assert.doesNotReject(() => verifySolanaDevnetTransfer({
+    connection,
+    signature: 'c'.repeat(88),
+    buyerAddress: buyer,
+    treasuryAddress: treasury,
+    priceLamports: 100,
+  }));
+  await assert.rejects(
+    () => verifySolanaDevnetTransfer({
+      connection,
+      signature: 'd'.repeat(88),
+      buyerAddress: '33333333333333333333333333333333',
+      treasuryAddress: treasury,
+      priceLamports: 100,
+    }),
+    { code: 'PAYMENT_WALLET_MISMATCH' },
+  );
 });
 
 test('contest socket flow creates a wallet, charges entry, and enters the linked jury room', async () => {

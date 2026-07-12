@@ -4,11 +4,12 @@
 
 Socket events:
 
-- `contest:session` `{ nickname, participantId?, resumeToken? }`
+- `contest:session` `{ nickname, walletAddress?, participantId?, resumeToken? }`
 - `contest:list` `{ participantId?, resumeToken? }`
 - `contest:lookup` `{ inviteCode, participantId?, resumeToken? }`
 - `contest:create` `{ name, entryCredits, capacity, nickname?, participantId?, resumeToken? }`
 - `contest:join` `{ contestId?, inviteCode?, nickname?, participantId?, resumeToken? }`
+- `wallet:buy_points` `{ signature, packageId, walletAddress, participantId, resumeToken }`
 - `room:join` `{ roomCode, nickname, participantId?, resumeToken? }`
 - `vote:cast` `{ callId, choice: "stands" | "overturned" }`
 - `replay:restart` `{}`
@@ -17,10 +18,12 @@ Socket events:
 ## Contest contract
 
 All balances, entry fees, prize pools, and rewards are **non-cash test credits**.
-There is no deposit, withdrawal, payment, token-transfer, or cash-redemption path.
-A new `contest:session` starts with 1,000 `TEST_CREDITS`. Unknown saved
-credentials return `INVALID_SESSION`; retry with only a nickname to create a
-new demo wallet.
+The optional top-up rail accepts only Devnet SOL and credits Demo Credits after
+the server verifies an exact System Program transfer to the configured demo
+treasury. There is no mainnet payment, withdrawal, token redemption, or cash
+value. A new `contest:session` starts with 1,000 `TEST_CREDITS`. Unknown saved
+credentials return `INVALID_SESSION`; retry with a wallet and nickname to create
+a new demo wallet.
 
 Contest acknowledgements use these shapes:
 
@@ -37,8 +40,24 @@ Contest acknowledgements use these shapes:
 - `contest:join` returns `{ ok, session, wallet, contest }`. Joining by private
   id requires its invite code; joining by invite code alone is supported.
 
-`session` is `{ participantId, resumeToken, nickname }`. `wallet` is
+`session` is `{ participantId, resumeToken, nickname, walletAddress? }`. `wallet` is
 `{ participantId, balanceCredits, currency: "TEST_CREDITS", isWithdrawable: false }`.
+
+## Devnet Demo Credit top-ups
+
+The frontend exposes two fixed packages:
+
+| Package | Exact Devnet SOL transfer | Demo Credits |
+|---|---:|---:|
+| `pack_1` | `0.1 SOL` | `5,000 DC` |
+| `pack_2` | `0.5 SOL` | `30,000 DC` |
+
+The connected wallet is bound to the demo session. The server polls Solana RPC
+until the signature is confirmed, checks the signer, source, destination, exact
+lamports, and successful transaction status, then credits the signature once.
+The treasury and RPC URL are configured with `SOLANA_TREASURY_WALLET` and
+`SOLANA_RPC_URL`; defaults are a public demo treasury and Devnet RPC. Never put
+a private key in the frontend or Render environment.
 
 A contest summary is:
 

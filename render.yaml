@@ -10,3 +10,13 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: CLIENT_ORIGIN
+        value: https://controversialfifaodds.vercel.app
+      - key: SOLANA_RPC_URL
+        value: https://api.devnet.solana.com
+      - key: SOLANA_NETWORK
+        value: devnet
+      - key: SOLANA_TREASURY_WALLET
+        value: 6MS566y46t3C37p7TnnK7yieoSbLimWEwwKemXxFMJ5A
+      - key: CONTEST_ENTRY_WINDOW_MS
+        value: "20000"

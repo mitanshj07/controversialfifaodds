@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
+import { useWallet } from '@solana/wallet-adapter-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import ContestLobby, { FALLBACK_CONTESTS } from "./ContestLobby.jsx";
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || undefined;
+const SERVER_URL = import.meta.env.VITE_SERVER_URL
+  || (import.meta.env.PROD ? "https://controversialfifaodds.onrender.com" : undefined);
 const SESSION_KEY = "the-call-session-v1";
 
 const FALLBACK_STATE = {
@@ -145,9 +148,6 @@ function Header({ roomCode, connected, muted, onToggleMute }) {
   );
 }
 
-import { useWallet } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-
 function JoinGate({ open, connected, error, onJoin }) {
   const { publicKey } = useWallet();
 
@@ -156,7 +156,7 @@ function JoinGate({ open, connected, error, onJoin }) {
   const submit = (event) => {
     event.preventDefault();
     if (!publicKey) return;
-    onJoin({ nickname: publicKey.toBase58().slice(0, 8), roomCode: "JURY12" });
+    onJoin({ nickname: publicKey.toBase58().slice(0, 8), walletAddress: publicKey.toBase58(), roomCode: "JURY12" });
   };
 
   return (
@@ -415,6 +415,7 @@ function LiveContestStrip({ contest, onBack }) {
 }
 
 export default function App() {
+  const { publicKey } = useWallet();
   const socketRef = useRef(null);
   const demoCallIndexRef = useRef(0);
   const [connected, setConnected] = useState(false);
@@ -494,9 +495,9 @@ export default function App() {
     if (serverVote) setCurrentVote(serverVote);
   }, [currentParticipant]);
 
-  const join = ({ nickname, roomCode }) => {
+  const join = ({ nickname, walletAddress, roomCode }) => {
     setJoinError("");
-    socketRef.current?.emit("contest:session", { nickname }, (response) => {
+    socketRef.current?.emit("contest:session", { nickname, walletAddress }, (response) => {
       if (!response || response.ok === false) {
         setJoinError(response?.error || "Could not open your contest profile. Try again.");
         return;
@@ -645,6 +646,7 @@ export default function App() {
     const response = await socketRequest(socketRef.current, "wallet:buy_points", {
       signature,
       packageId,
+      walletAddress: publicKey?.toBase58() || session?.walletAddress,
       participantId: session?.participantId,
       resumeToken: session?.resumeToken,
     });

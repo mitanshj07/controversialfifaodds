@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server as SocketIOServer } from 'socket.io';
 import { ScriptedReplayAdapter } from './adapters/scripted-replay-adapter.js';
-import { ContestManager } from './domain/contest-manager.js';
+import { ContestError, ContestManager } from './domain/contest-manager.js';
 import { RoomError } from './domain/room-session.js';
 import { RoomManager } from './domain/room-manager.js';
 import { DEMO_EVENTS, DEMO_JURORS, DEMO_MATCH } from './match-script.js';
@@ -13,8 +13,54 @@ import { Connection, PublicKey } from '@solana/web3.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PORT = 3001;
-export const TREASURY_WALLET = new PublicKey('6MS566y46t3C37p7TnnK7yieoSbLimWEwwKemXxFMJ5A');
-const solanaConnection = new Connection('https://api.devnet.solana.com');
+export const DEFAULT_SOLANA_RPC_URL = 'https://api.devnet.solana.com';
+export const DEFAULT_TREASURY_WALLET = '6MS566y46t3C37p7TnnK7yieoSbLimWEwwKemXxFMJ5A';
+export const SOLANA_PACKAGES = Object.freeze({
+  pack_1: Object.freeze({ priceLamports: 100_000_000, credits: 5_000 }),
+  pack_2: Object.freeze({ priceLamports: 500_000_000, credits: 30_000 }),
+});
+
+const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+export async function verifySolanaDevnetTransfer({
+  connection,
+  signature,
+  buyerAddress,
+  treasuryAddress,
+  priceLamports,
+  attempts = 8,
+  intervalMs = 400,
+}) {
+  if (typeof signature !== 'string' || signature.length < 80 || signature.length > 100) {
+    throw new ContestError('INVALID_PAYMENT', 'The Solana transaction signature is invalid.');
+  }
+  let transaction = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    transaction = await connection.getParsedTransaction(signature, {
+      commitment: 'confirmed',
+      maxSupportedTransactionVersion: 0,
+    });
+    if (transaction) break;
+    if (attempt < attempts - 1) await sleep(intervalMs);
+  }
+  if (!transaction) throw new ContestError('PAYMENT_NOT_FOUND', 'The Solana payment is not confirmed yet.');
+  if (transaction.meta?.err) throw new ContestError('PAYMENT_FAILED', 'The Solana payment failed on-chain.');
+
+  const signer = transaction.transaction.message.accountKeys
+    ?.find((account) => String(account.pubkey) === buyerAddress && account.signer);
+  if (!signer) throw new ContestError('PAYMENT_WALLET_MISMATCH', 'The payment was not signed by your connected wallet.');
+
+  const validTransfer = transaction.transaction.message.instructions?.some((instruction) => {
+    const info = instruction.parsed?.info;
+    return instruction.program === 'system'
+      && instruction.parsed?.type === 'transfer'
+      && info?.source === buyerAddress
+      && info?.destination === treasuryAddress
+      && Number(info?.lamports) === priceLamports;
+  });
+  if (!validTransfer) throw new ContestError('INVALID_PAYMENT', 'The payment must be an exact Devnet SOL transfer to the demo treasury.');
+  return transaction;
+}
 
 const finitePlaybackRate = (value) => {
   const parsed = Number(value);
@@ -32,7 +78,13 @@ export function createTheCallServer({
   allowedOrigin = process.env.CLIENT_ORIGIN || '*',
   tickRateMs = 250,
   entryWindowMs = Number(process.env.CONTEST_ENTRY_WINDOW_MS) || 20_000,
+  solanaRpcUrl = process.env.SOLANA_RPC_URL || DEFAULT_SOLANA_RPC_URL,
+  solanaNetwork = process.env.SOLANA_NETWORK || 'devnet',
+  treasuryWallet = process.env.SOLANA_TREASURY_WALLET || DEFAULT_TREASURY_WALLET,
 } = {}) {
+  if (solanaNetwork !== 'devnet') {
+    throw new Error('Only Solana Devnet is enabled for Demo Credit top-ups.');
+  }
   const app = express();
   const httpServer = createHttpServer(app);
   const io = new SocketIOServer(httpServer, {
@@ -50,6 +102,8 @@ export function createTheCallServer({
     }),
   });
   const contests = new ContestManager({ match: DEMO_MATCH, entryWindowMs });
+  const solanaConnection = new Connection(solanaRpcUrl, 'confirmed');
+  const treasuryPublicKey = new PublicKey(treasuryWallet);
 
   app.disable('x-powered-by');
   app.use((request, response, next) => {
@@ -67,6 +121,7 @@ export function createTheCallServer({
     now: Date.now(),
     replay: { source: 'scripted', playbackRate },
     contests: { entryWindowMs: contests.entryWindowMs },
+    solana: { network: solanaNetwork, treasuryWallet: treasuryPublicKey.toBase58() },
     ...manager.health(),
   });
   app.get('/health', health);
@@ -131,37 +186,30 @@ export function createTheCallServer({
     io.emit('contest:updated', { contestId, type });
   });
 
-  const PACKAGES = {
-    'pack_1': { priceLamports: 100_000_000, credits: 5000 },
-    'pack_2': { priceLamports: 500_000_000, credits: 30000 },
-  };
-
   io.on('connection', (socket) => {
     socket.on('wallet:buy_points', async (payload = {}, acknowledge = () => {}) => {
       try {
-        const { signature, packageId, participantId, resumeToken } = payload;
-        const pack = PACKAGES[packageId];
-        if (!pack) throw new Error('Invalid package ID.');
-        
-        // Wait briefly for confirmation if needed (frontend should wait, but just in case)
-        const tx = await solanaConnection.getParsedTransaction(signature, { maxSupportedTransactionVersion: 0 });
-        if (!tx) throw new Error('Transaction not found or not confirmed yet.');
-        if (tx.meta?.err) throw new Error('Transaction failed on-chain.');
-
-        // Verify transfer instruction
-        const instructions = tx.transaction.message.instructions;
-        const isValidTransfer = instructions.some((ix) => {
-          return ix.program === 'system' && 
-                 ix.parsed?.type === 'transfer' && 
-                 ix.parsed?.info?.destination === TREASURY_WALLET.toBase58() &&
-                 ix.parsed?.info?.lamports >= pack.priceLamports;
+        const { signature, packageId, participantId, resumeToken, walletAddress } = payload;
+        const pack = SOLANA_PACKAGES[packageId];
+        if (!pack) throw new ContestError('INVALID_PACKAGE', 'That Demo Credit package is not available.');
+        let buyerPublicKey;
+        try {
+          buyerPublicKey = new PublicKey(walletAddress);
+        } catch {
+          throw new ContestError('INVALID_WALLET', 'Connect a valid Solana wallet before purchasing.');
+        }
+        await verifySolanaDevnetTransfer({
+          connection: solanaConnection,
+          signature,
+          buyerAddress: buyerPublicKey.toBase58(),
+          treasuryAddress: treasuryPublicKey.toBase58(),
+          priceLamports: pack.priceLamports,
         });
-
-        if (!isValidTransfer) throw new Error('Invalid transfer details.');
 
         const result = contests.buyPoints({
           participantId,
           resumeToken,
+          walletAddress: buyerPublicKey.toBase58(),
           amountCredits: pack.credits,
           transactionId: signature,
         });

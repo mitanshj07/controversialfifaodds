@@ -98,6 +98,41 @@ test('opens and resumes a contest wallet session without charging an entry', () 
   );
 });
 
+test('credits a verified wallet purchase once and rejects wallet mismatch or replay', () => {
+  const manager = deterministicManager();
+  const walletAddress = '11111111111111111111111111111111';
+  const opened = manager.session({ nickname: 'Wallet Alice', walletAddress });
+  const signature = 'a'.repeat(88);
+  const credited = manager.buyPoints({
+    participantId: opened.session.participantId,
+    resumeToken: opened.session.resumeToken,
+    walletAddress,
+    amountCredits: 5_000,
+    transactionId: signature,
+  });
+  assert.equal(credited.wallet.balanceCredits, 6_000);
+  assert.throws(
+    () => manager.buyPoints({
+      participantId: opened.session.participantId,
+      resumeToken: opened.session.resumeToken,
+      walletAddress,
+      amountCredits: 5_000,
+      transactionId: signature,
+    }),
+    (error) => error instanceof ContestError && error.code === 'DUPLICATE_TRANSACTION',
+  );
+  assert.throws(
+    () => manager.buyPoints({
+      participantId: opened.session.participantId,
+      resumeToken: opened.session.resumeToken,
+      walletAddress: '22222222222222222222222222222222',
+      amountCredits: 5_000,
+      transactionId: 'b'.repeat(88),
+    }),
+    (error) => error instanceof ContestError && error.code === 'WALLET_MISMATCH',
+  );
+});
+
 test('creates a private contest, charges its creator once, and lists personalized membership', () => {
   const manager = deterministicManager({ featuredContests: [] });
   const created = manager.create({

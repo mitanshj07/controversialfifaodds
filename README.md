@@ -4,7 +4,7 @@ THE CALL is a realtime football fan-jury contest app. Players use **non-cash Dem
 
 The MVP combines a fantasy-contest-style lobby with the existing server-authoritative fan jury: featured public contests, private invite codes, entry confirmation, Demo Credit wallets, capacity limits, a server-owned entry window, waiting rooms, live ranks, tie-safe payout ladders, and simulated rewards. A deterministic two-minute replay supplies four Big Calls for local demos.
 
-> Demo Credits are free test credits. They cannot be purchased, withdrawn, exchanged, or redeemed. This repository contains no real-money payment, deposit, withdrawal, token-transfer, or cash-redemption path.
+> Demo Credits are non-cash test points. The optional top-up rail accepts Devnet SOL only, verifies the transfer on-chain, and credits Demo Credits; points cannot be withdrawn, exchanged, or redeemed. Mainnet payments are not enabled.
 
 ## Run it
 
@@ -28,7 +28,7 @@ The Express server automatically serves `dist/`. Run `npm run check` for the bac
 
 ## Fast demo
 
-1. Open the app and enter any matchday nickname. A new demo account receives 1,000 DC; no wallet or payment is requested.
+1. Open the app, connect a Solana wallet on Devnet, and enter the jury. A new demo account receives 1,000 DC for free.
 2. Pick a featured public contest and review the exact entry deduction before confirming.
 3. Enter its live jury, then choose **Stands** or **Overturned** before each server-controlled voting window closes.
 4. Watch the official verdict, score, streak, shared rank, provisional reward, history, and reputation root update.
@@ -96,7 +96,7 @@ Equal contest scores share rank and split the occupied payout positions; respons
 
 ## Production boundary
 
-This is a non-cash prototype, not a production wagering system. Enabling money entry is intentionally outside the feature set. A compliant production launch would require a jurisdiction-specific legal determination plus age and identity checks, geofencing, payments and tax controls, responsible-play safeguards, fraud controls, persistent auditable ledgers, operator tooling, and real match-feed administration.
+This is a non-cash prototype, not a production wagering system. The Solana rail is Devnet-only and only tops up non-redeemable Demo Credits. Enabling mainnet or money entry would require a jurisdiction-specific legal determination plus age and identity checks, geofencing, payments and tax controls, responsible-play safeguards, fraud controls, persistent auditable ledgers, operator tooling, and real match-feed administration.
 
 ## TxLINE integration boundary
 
