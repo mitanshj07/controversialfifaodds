@@ -25,3 +25,20 @@ test('maps documented review types to fan-jury kinds', () => {
   assert.equal(mapVarKind('RedCard'), 'red_card_review');
   assert.equal(mapVarKind(null), 'var_review');
 });
+
+test('normalises TxLINE game finalisation markers and final scores', () => {
+  const record = normaliseTxLineRecord({
+    FixtureId: 17952170,
+    Seq: 941,
+    Action: 'game_finalised',
+    StatusId: 100,
+    Period: 100,
+    Data: { ScoreH: 2, ScoreA: 1 },
+  });
+
+  assert.equal(record.action, 'game_finalised');
+  assert.equal(record.statusId, 100);
+  assert.equal(record.period, 100);
+  assert.equal(record.homeScore, 2);
+  assert.equal(record.awayScore, 1);
+});

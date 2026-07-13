@@ -13,15 +13,16 @@ Socket events:
 - `room:join` `{ roomCode, nickname, participantId?, resumeToken? }`
 - `vote:cast` `{ callId, choice: "stands" | "overturned" }`
 - `replay:restart` `{}`
-- server broadcasts `contest:updated`, `room:state`, `call:opened`, `call:settled`, and `replay:restarted`
+- server broadcasts `contest:updated`, `room:state`, `call:opened`, `call:settled`, `match:ended`, and `replay:restarted`
 
-`GET /api/live-matches` is the server-side TxOdds fixture discovery endpoint
-used by the separate Live Matches lobby section. It returns normalized fixture
-cards without exposing TxOdds credentials to the browser. Configure
-`TXODDS_FIXTURES_URL` with the live fixture endpoint supplied by your TxOdds
-subscription; optional `TXODDS_USER_ID`, `TXODDS_PASSWORD`, JWT, and API-token
-values remain server-side. When the URL is absent, the endpoint returns an
-explicit unconfigured state rather than inventing demo fixtures.
+`GET /api/live-matches` is the server-side TxOdds/TxLINE fixture discovery
+endpoint used by the separate Live Matches lobby section. It returns normalized
+fixture cards without exposing credentials to the browser. For the current
+TxLINE API, set `TXLINE_BASE_URL`, `TXLINE_GUEST_JWT`, and
+`TXLINE_API_TOKEN`; the service derives `/api/fixtures/snapshot`. A legacy XML
+subscription can instead set `TXODDS_FIXTURES_URL` plus its server-side
+`TXODDS_USER_ID` and `TXODDS_PASSWORD`. When neither mode is configured, the
+endpoint returns an explicit unconfigured state rather than inventing fixtures.
 
 ## Contest contract
 
@@ -144,8 +145,11 @@ Contest members cannot restart a replay; the match desk owns the contest feed.
 
 Call settlements refresh projected rank and reward. Equal scores share the
 same rank and the same averaged reward across their occupied payout positions,
-so join time and response speed never break a tie. At full time, simulated
-rewards are credited once using an idempotent match-generation settlement key.
+so join time and response speed never break a tie. At full time, the server
+publishes `match.result`, marks the contest completed, and credits simulated
+rewards once using an idempotent match-generation settlement key. The client
+opens a results modal with the final score, rank, and reward; the final result
+remains available in room state after the modal is closed.
 
 Expected contest errors include `INVALID_SESSION`, `INVALID_INVITE_CODE`,
 `CONTEST_NOT_FOUND`, `ALREADY_JOINED`, `CONTEST_FULL`,

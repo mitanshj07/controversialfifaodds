@@ -276,8 +276,16 @@ export class RoomSession extends EventEmitter {
         this.#settleCall(event);
         break;
       case FeedEventType.MATCH_ENDED:
+        this.match.homeScore = safeInteger(payload.homeScore, this.match.homeScore);
+        this.match.awayScore = safeInteger(payload.awayScore, this.match.awayScore);
         this.match.phase = payload.phase ?? 'full_time';
+        this.match.clock = 'FT';
+        this.match.result = this.#finalResult(payload, event.offsetMs);
+        if (this.activeCall?.status === 'open' || this.activeCall?.status === 'locked') {
+          this.activeCall.status = 'locked';
+        }
         this.#addFeedActivity(event);
+        this.emit('matchEnded', { ...this.match.result });
         break;
       default:
         return { accepted: false, reason: 'unknown_type' };
@@ -291,7 +299,7 @@ export class RoomSession extends EventEmitter {
     if (!clock || clock.generation !== this.generation) return false;
     this.replay = {
       generation: this.generation,
-      status: clock.status === 'ended' ? 'ended' : 'playing',
+      status: clock.status === 'ended' || this.match.result ? 'ended' : 'playing',
       elapsedMs: safeInteger(clock.elapsedMs),
       durationMs: safeInteger(clock.durationMs, this.matchDefinition.durationMs),
       progress: Number.isFinite(clock.progress) ? clock.progress : 0,
@@ -323,6 +331,15 @@ export class RoomSession extends EventEmitter {
     this.replay.status = 'ended';
     this.match.clock = 'FT';
     this.match.phase = 'full_time';
+    if (!this.match.result) {
+      this.match.result = this.#finalResult({
+        phase: 'full_time',
+        homeScore: this.match.homeScore,
+        awayScore: this.match.awayScore,
+        message: 'Full-time: the final result is confirmed.',
+      }, this.replay.elapsedMs);
+      this.emit('matchEnded', { ...this.match.result });
+    }
     this.emit('state');
     return true;
   }
@@ -401,6 +418,7 @@ export class RoomSession extends EventEmitter {
         clock: this.match.clock,
         elapsedMs: this.match.elapsedMs,
         phase: this.match.phase,
+        result: this.match.result ? { ...this.match.result } : null,
       },
       replay: {
         status: this.replay.status,
@@ -447,6 +465,7 @@ export class RoomSession extends EventEmitter {
       clock: '0′',
       elapsedMs: 0,
       phase: 'pre_match',
+      result: null,
     };
   }
 
@@ -478,6 +497,27 @@ export class RoomSession extends EventEmitter {
       participant.bestStreak = 0;
       participant.votes.clear();
     }
+  }
+
+  #finalResult(payload = {}, finalizedAt = this.replay.elapsedMs) {
+    const homeScore = safeInteger(payload.homeScore, this.match.homeScore);
+    const awayScore = safeInteger(payload.awayScore, this.match.awayScore);
+    const outcome = payload.outcome
+      ?? (homeScore === awayScore ? 'draw' : homeScore > awayScore ? 'home' : 'away');
+    return {
+      status: 'full_time',
+      phase: payload.phase ?? 'full_time',
+      homeScore,
+      awayScore,
+      outcome,
+      statusId: payload.statusId ?? null,
+      period: payload.period ?? null,
+      fixtureId: payload.fixtureId ?? this.match.id,
+      seq: payload.seq ?? null,
+      source: payload.source ?? 'feed',
+      message: payload.message ?? null,
+      finalizedAt,
+    };
   }
 
   #openCall(event) {

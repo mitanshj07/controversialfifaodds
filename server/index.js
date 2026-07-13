@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server as SocketIOServer } from 'socket.io';
 import { ScriptedReplayAdapter } from './adapters/scripted-replay-adapter.js';
+import { TxLineSseAdapter } from './adapters/txline-sse-adapter.js';
 import { ContestError, ContestManager } from './domain/contest-manager.js';
 import { RoomError } from './domain/room-session.js';
 import { RoomManager } from './domain/room-manager.js';
@@ -92,15 +93,28 @@ export function createTheCallServer({
     cors: { origin: allowedOrigin, methods: ['GET', 'POST'] },
   });
 
+  const txLineConfigured = Boolean(
+    process.env.TXLINE_GUEST_JWT
+    && process.env.TXLINE_API_TOKEN
+    && process.env.TXLINE_FIXTURE_ID,
+  );
+
   const manager = new RoomManager({
     match: DEMO_MATCH,
     demoJurors: DEMO_JURORS,
-    adapterFactory: () => new ScriptedReplayAdapter({
-      events: DEMO_EVENTS,
-      durationMs: DEMO_MATCH.durationMs,
-      playbackRate,
-      tickRateMs,
-    }),
+    adapterFactory: () => txLineConfigured
+      ? new TxLineSseAdapter({
+          baseUrl: process.env.TXLINE_BASE_URL || 'https://txline-dev.txodds.com',
+          jwt: process.env.TXLINE_GUEST_JWT,
+          apiToken: process.env.TXLINE_API_TOKEN,
+          fixtureId: process.env.TXLINE_FIXTURE_ID,
+        })
+      : new ScriptedReplayAdapter({
+          events: DEMO_EVENTS,
+          durationMs: DEMO_MATCH.durationMs,
+          playbackRate,
+          tickRateMs,
+        }),
   });
   const contests = new ContestManager({ match: DEMO_MATCH, entryWindowMs });
   const txOddsLive = new TxOddsLiveService();
@@ -121,10 +135,11 @@ export function createTheCallServer({
     ok: true,
     service: 'the-call-match-desk',
     now: Date.now(),
-    replay: { source: 'scripted', playbackRate },
+    replay: { source: txLineConfigured ? 'txline' : 'scripted', playbackRate },
     contests: { entryWindowMs: contests.entryWindowMs },
     solana: { network: solanaNetwork, treasuryWallet: treasuryPublicKey.toBase58() },
     txodds: { configured: txOddsLive.configured },
+    txline: { configured: txLineConfigured },
     ...manager.health(),
   });
   app.get('/health', health);
@@ -188,6 +203,9 @@ export function createTheCallServer({
   });
   manager.on('restarted', ({ roomCode, replay }) => {
     io.to(roomCode).emit('replay:restarted', replay);
+  });
+  manager.on('matchEnded', ({ roomCode, result }) => {
+    io.to(roomCode).emit('match:ended', { roomCode, result });
   });
   contests.on('state', ({ contestId, type }) => {
     io.emit('contest:updated', { contestId, type });

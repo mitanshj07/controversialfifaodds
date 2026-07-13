@@ -17,6 +17,7 @@ const FALLBACK_STATE = {
     awayScore: 1,
     clock: "67:14",
     phase: "Second half",
+    result: null,
   },
   replay: { status: "loading", progress: 0.57 },
   participants: [],
@@ -80,6 +81,7 @@ function normaliseState(payload) {
       awayScore: match.awayScore ?? match.score?.away ?? payload.awayScore ?? 0,
       clock: match.clock || payload.clock || "00:00",
       phase: match.phase || match.status || payload.phase || "Pre-match",
+      result: match.result || payload.result || null,
     },
     replay: { ...FALLBACK_STATE.replay, ...(payload.replay || {}) },
     participants: payload.participants || [],
@@ -245,7 +247,7 @@ function VoteButton({ choice, label, sublabel, selected, disabled, onVote }) {
   );
 }
 
-function JuryPanel({ call, currentVote, onVote, serverTime }) {
+function JuryPanel({ call, currentVote, onVote, serverTime, match, replay }) {
   const isOpen = call?.status === "open";
   const remaining = useCountdown(call?.closesAt, isOpen, serverTime);
   const actualVotes = call?.counts?.stands + call?.counts?.overturned;
@@ -254,6 +256,17 @@ function JuryPanel({ call, currentVote, onVote, serverTime }) {
   const overturnedPct = actualVotes > 0 ? 100 - standsPct : 0;
 
   if (!call) {
+    if (match?.result || replay?.status === "ended" || match?.phase === "full_time") {
+      return (
+        <section className="jury-panel is-final">
+          <div className="final-whistle-mark" aria-hidden="true">FT</div>
+          <div className="eyebrow"><span>Full time</span> Results are locked</div>
+          <h2>Final whistle.<br />Your result is in.</h2>
+          <p>The official score and contest settlement are final. Open the results card to see your rank, reward, and the calls that made the difference.</p>
+          <div className="final-score-line"><strong>{match?.homeScore ?? 0}</strong><span>–</span><strong>{match?.awayScore ?? 0}</strong></div>
+        </section>
+      );
+    }
     return (
       <section className="jury-panel is-waiting">
         <div className="waiting-orbit" aria-hidden="true"><span /><i /><b /></div>
@@ -397,6 +410,46 @@ function ProofRibbon({ lastProof, call }) {
   );
 }
 
+function MatchResultsModal({ open, match, contest, result: resultOverride, onClose, onBack }) {
+  if (!open) return null;
+  const result = match?.result || resultOverride || {};
+  const membership = contest?.membership || {};
+  const homeScore = Number(result.homeScore ?? match?.homeScore ?? 0);
+  const awayScore = Number(result.awayScore ?? match?.awayScore ?? 0);
+  const outcome = result.outcome || (homeScore === awayScore ? "draw" : homeScore > awayScore ? "home" : "away");
+  const outcomeLabel = outcome === "draw" ? "DRAW" : outcome === "home" ? `${match?.home?.name || "HOME"} WIN` : `${match?.away?.name || "AWAY"} WIN`;
+  const hasReward = Number(membership.rewardCredits || 0) > 0;
+
+  return (
+    <div className="results-backdrop" role="presentation">
+      <section className="results-modal" role="dialog" aria-modal="true" aria-labelledby="results-title">
+        <button className="results-close" type="button" onClick={onClose} aria-label="Close match results">×</button>
+        <div className="results-kicker"><span>FULL TIME</span> Official result</div>
+        <h2 id="results-title">Results are out.</h2>
+        <p className="results-intro">The final whistle is confirmed. Your contest entry is now settled against the locked jury scores.</p>
+
+        <div className="results-scoreboard">
+          <div><small>{match?.home?.code || "HOME"}</small><strong>{match?.home?.name || "Home"}</strong></div>
+          <div className="results-score"><strong>{homeScore}</strong><span>–</span><strong>{awayScore}</strong><small>FT · {outcomeLabel}</small></div>
+          <div className="results-away"><small>{match?.away?.code || "AWAY"}</small><strong>{match?.away?.name || "Away"}</strong></div>
+        </div>
+
+        <div className="results-ledger">
+          <div><span>YOUR FINISH</span><strong>{membership.rank ? `#${membership.rank} / ${contest?.joinedCount || "—"}` : "Results recorded"}</strong></div>
+          <div><span>FINAL SCORE</span><strong>{membership.score ?? "—"} POINTS</strong></div>
+          <div className={hasReward ? "is-reward" : ""}><span>{hasReward ? "REWARD CREDITED" : "REWARD"}</span><strong>{hasReward ? `+${Number(membership.rewardCredits).toLocaleString()} DC` : "No payout"}</strong></div>
+        </div>
+
+        <div className="results-status"><i /> {contest?.status === "completed" ? "CONTEST SETTLED · DEMO CREDITS UPDATED" : "MATCH RESULT CONFIRMED · CONTEST SYNCING"}</div>
+        <div className="results-actions">
+          <button type="button" className="results-secondary" onClick={onClose}>KEEP WATCHING</button>
+          <button type="button" className="results-primary" onClick={onBack}>BACK TO CONTESTS <span aria-hidden="true">→</span></button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function LiveContestStrip({ contest, onBack }) {
   const waiting = contest?.status === "open" && contest?.entryClosesAt && new Date(contest.entryClosesAt).getTime() > Date.now();
   const secondsUntilOpen = useCountdown(contest?.entryClosesAt, Boolean(waiting), null);
@@ -430,6 +483,9 @@ export default function App() {
   const [wallet, setWallet] = useState({ balanceCredits: 1000, currency: "TEST_CREDITS", isWithdrawable: false });
   const [liveMatches, setLiveMatches] = useState({ configured: false, matches: [], loading: false, error: null, fetchedAt: null });
   const [activeContest, setActiveContest] = useState(null);
+  const [matchEndSignal, setMatchEndSignal] = useState(null);
+  const [resultsOpen, setResultsOpen] = useState(false);
+  const [dismissedResultKey, setDismissedResultKey] = useState(null);
   const activeCallId = roomState.activeCall?.id;
 
   useEffect(() => {
@@ -480,11 +536,28 @@ export default function App() {
       if (payload?.roomState) setRoomState(normaliseState(payload.roomState));
     });
     socket.on("replay:restarted", () => setCurrentVote(null));
+    socket.on("match:ended", (payload) => {
+      if (payload?.result) setMatchEndSignal(payload.result);
+    });
 
     return () => socket.close();
   }, []);
 
   useEffect(() => setCurrentVote(null), [activeCallId]);
+
+  const finalResult = roomState.match.result || matchEndSignal;
+  const resultKey = finalResult
+    ? `${roomState.match.id}:${roomState.generation}:${finalResult.finalizedAt ?? roomState.match.elapsedMs}`
+    : null;
+  const matchFinished = Boolean(finalResult)
+    || roomState.replay.status === "ended"
+    || roomState.match.phase === "full_time";
+
+  useEffect(() => {
+    if (screen === "live" && matchFinished && resultKey && dismissedResultKey !== resultKey) {
+      setResultsOpen(true);
+    }
+  }, [dismissedResultKey, matchFinished, resultKey, screen]);
 
   const currentParticipant = useMemo(
     () => roomState.you || roomState.participants.find((person) => person.id === session?.participantId || person.participantId === session?.participantId),
@@ -567,6 +640,9 @@ export default function App() {
   const restart = () => {
     demoCallIndexRef.current = 0;
     setCurrentVote(null);
+    setMatchEndSignal(null);
+    setResultsOpen(false);
+    setDismissedResultKey(null);
     socketRef.current?.emit("replay:restart", {}, (response) => {
       if (response?.state) setRoomState(normaliseState(response.state));
     });
@@ -654,6 +730,9 @@ export default function App() {
 
   const enterLiveContest = async (contest = activeContest) => {
     if (!contest?.roomCode) return { ok: false, error: "Join a contest before entering the live jury." };
+    setMatchEndSignal(null);
+    setResultsOpen(false);
+    setDismissedResultKey(null);
     const response = await socketRequest(socketRef.current, "room:join", {
       roomCode: contest.roomCode,
       nickname: session?.nickname,
@@ -693,9 +772,15 @@ export default function App() {
   };
 
   const backToLobby = async () => {
+    setResultsOpen(false);
     setScreen("lobby");
     await refreshContests();
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const closeResults = () => {
+    setResultsOpen(false);
+    if (resultKey) setDismissedResultKey(resultKey);
   };
 
   return (
@@ -721,7 +806,7 @@ export default function App() {
           <LiveContestStrip contest={activeContest || roomState.contest} onBack={backToLobby} />
           <Scoreboard match={roomState.match} replay={roomState.replay} onRestart={restart} onNextCall={jumpToNextCall} showDemoControls={!activeContest && !roomState.contest} />
           <div className="workspace-grid">
-            <JuryPanel call={roomState.activeCall} currentVote={currentVote} onVote={vote} serverTime={roomState.serverTime} />
+            <JuryPanel call={roomState.activeCall} currentVote={currentVote} onVote={vote} serverTime={roomState.serverTime} match={roomState.match} replay={roomState.replay} />
             <aside>
               <Leaderboard participants={roomState.participants} participantId={session?.participantId} />
               <CallHistory history={roomState.history} />
@@ -730,6 +815,14 @@ export default function App() {
         </main>
         <ProofRibbon lastProof={roomState.lastProof} call={roomState.activeCall} />
       </div>}
+      <MatchResultsModal
+        open={joined && screen === "live" && resultsOpen}
+        match={roomState.match}
+        result={finalResult}
+        contest={activeContest || roomState.contest}
+        onClose={closeResults}
+        onBack={backToLobby}
+      />
     </>
   );
 }

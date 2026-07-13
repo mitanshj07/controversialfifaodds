@@ -24,6 +24,15 @@ const teamName = (value) => {
   return asText(value);
 };
 
+const statusFromGameState = (value) => {
+  const text = asText(value).toLowerCase();
+  const numeric = Number(value);
+  if (numeric === 1 || text === 'ns' || text.includes('scheduled')) return 'scheduled';
+  if ([2, 3, 4, 7, 8, 9, 12, 14].includes(numeric) || ['h1', 'ht', 'h2', 'et1', 'htet', 'et2', 'pe'].includes(text)) return 'live';
+  if ([5, 10, 13].includes(numeric) || ['f', 'fet', 'fpe', 'ft', 'final', 'completed'].includes(text)) return 'completed';
+  return '';
+};
+
 const pickArray = (payload) => {
   if (Array.isArray(payload)) return payload;
   return payload?.fixtures || payload?.matches || payload?.events || payload?.data || payload?.results || [];
@@ -62,6 +71,8 @@ export function parseTxOddsXml(xml) {
 
 const normalizeStatus = (value, assumeLive) => {
   const status = asText(value).toLowerCase();
+  const gameStateStatus = statusFromGameState(value);
+  if (gameStateStatus) return gameStateStatus;
   if (status.includes('finish') || status === 'ft' || status.includes('ended')) return 'completed';
   if (status.includes('live') || status.includes('playing') || status.includes('running') || status.includes('inplay') || status.includes('in_play')) return 'live';
   if (assumeLive && !status) return 'live';
@@ -70,10 +81,24 @@ const normalizeStatus = (value, assumeLive) => {
 
 export function normalizeTxOddsFixture(raw, { assumeLive = true } = {}) {
   const nested = raw?.fixture || raw?.match || raw?.event || {};
-  const homeValue = first(raw?.home, raw?.homeTeam, raw?.Home, nested?.home, nested?.homeTeam, nested?.Home);
-  const awayValue = first(raw?.away, raw?.awayTeam, raw?.Away, nested?.away, nested?.awayTeam, nested?.Away);
-  const status = normalizeStatus(first(raw?.status, raw?.state, raw?.gameState, raw?.matchStatus, nested?.status), assumeLive);
-  const id = first(raw?.id, raw?.fixtureId, raw?.fixtureID, raw?.ID, raw?.matchId, nested?.id, nested?.fixtureId);
+  const participant1 = first(raw?.Participant1, raw?.participant1, nested?.Participant1, nested?.participant1);
+  const participant2 = first(raw?.Participant2, raw?.participant2, nested?.Participant2, nested?.participant2);
+  const participant1IsHome = first(raw?.Participant1IsHome, raw?.participant1IsHome, nested?.Participant1IsHome, nested?.participant1IsHome);
+  const homeValue = participant1IsHome === false || participant1IsHome === 'false'
+    ? participant2
+    : participant1IsHome === true || participant1IsHome === 'true'
+      ? participant1
+      : first(raw?.home, raw?.homeTeam, raw?.Home, nested?.home, nested?.homeTeam, nested?.Home, participant1);
+  const awayValue = participant1IsHome === false || participant1IsHome === 'false'
+    ? participant1
+    : participant1IsHome === true || participant1IsHome === 'true'
+      ? participant2
+      : first(raw?.away, raw?.awayTeam, raw?.Away, nested?.away, nested?.awayTeam, nested?.Away, participant2);
+  const status = normalizeStatus(
+    first(raw?.status, raw?.state, raw?.matchStatus, nested?.status, raw?.gameState, raw?.GameState),
+    assumeLive,
+  );
+  const id = first(raw?.id, raw?.fixtureId, raw?.fixtureID, raw?.FixtureId, raw?.ID, raw?.matchId, nested?.id, nested?.fixtureId);
   const home = teamName(homeValue);
   const away = teamName(awayValue);
   if (!id || !home || !away) return null;
@@ -81,13 +106,13 @@ export function normalizeTxOddsFixture(raw, { assumeLive = true } = {}) {
     id: String(id),
     home,
     away,
-    competition: asText(first(raw?.competition, raw?.league, raw?.League, nested?.competition, nested?.league)),
-    startTime: first(raw?.startTime, raw?.matchTime, raw?.kickoff, raw?.MatchTime, nested?.startTime, nested?.matchTime) || null,
+    competition: asText(first(raw?.competition, raw?.competitionName, raw?.Competition, raw?.CompetitionName, raw?.league, raw?.League, nested?.competition, nested?.league)),
+    startTime: first(raw?.startTime, raw?.StartTime, raw?.matchTime, raw?.kickoff, raw?.MatchTime, nested?.startTime, nested?.matchTime) || null,
     status,
     live: status === 'live',
-    minute: asNumber(first(raw?.minute, raw?.clock, raw?.elapsed, nested?.minute)),
-    homeScore: asScore(first(raw?.homeScore, raw?.score?.home, raw?.homeGoals, nested?.homeScore)),
-    awayScore: asScore(first(raw?.awayScore, raw?.score?.away, raw?.awayGoals, nested?.awayScore)),
+    minute: asNumber(first(raw?.minute, raw?.Minute, raw?.clock, raw?.elapsed, nested?.minute)),
+    homeScore: asScore(first(raw?.homeScore, raw?.HomeScore, raw?.ScoreH, raw?.score?.home, raw?.homeGoals, nested?.homeScore)),
+    awayScore: asScore(first(raw?.awayScore, raw?.AwayScore, raw?.ScoreA, raw?.score?.away, raw?.awayGoals, nested?.awayScore)),
   };
 }
 
@@ -104,17 +129,21 @@ export class TxOddsLiveService {
     fixturesUrl = process.env.TXODDS_FIXTURES_URL || '',
     userId = process.env.TXODDS_USER_ID || '',
     password = process.env.TXODDS_PASSWORD || '',
+    baseUrl = process.env.TXLINE_BASE_URL || 'https://txline-dev.txodds.com',
     jwt = process.env.TXLINE_GUEST_JWT || '',
     apiToken = process.env.TXLINE_API_TOKEN || '',
     fetchFn = fetch,
     cacheTtlMs = Number(process.env.TXODDS_FIXTURES_CACHE_MS) || 60_000,
     now = Date.now,
   } = {}) {
-    this.fixturesUrl = fixturesUrl;
+    this.fixturesUrl = fixturesUrl || (jwt && apiToken
+      ? `${String(baseUrl || 'https://txline-dev.txodds.com').replace(/\/$/, '')}/api/fixtures/snapshot`
+      : '');
     this.userId = userId;
     this.password = password;
     this.jwt = jwt;
     this.apiToken = apiToken;
+    this.provider = this.fixturesUrl.includes('/api/fixtures/') ? 'txline' : 'txodds';
     this.fetchFn = fetchFn;
     this.cacheTtlMs = cacheTtlMs;
     this.now = now;
@@ -128,11 +157,11 @@ export class TxOddsLiveService {
   async list({ force = false } = {}) {
     if (!this.configured) {
       return {
-        provider: 'txodds',
+        provider: this.provider,
         configured: false,
         matches: [],
         fetchedAt: null,
-        message: 'Configure TXODDS_FIXTURES_URL on the server to load live fixtures.',
+        message: 'Configure TXODDS_FIXTURES_URL or activate TXLINE_GUEST_JWT and TXLINE_API_TOKEN on the server to load live fixtures.',
       };
     }
     if (!force && this.cache && this.now() - this.cache.fetchedAt < this.cacheTtlMs) return this.cache;
@@ -149,7 +178,7 @@ export class TxOddsLiveService {
       const contentType = response.headers?.get?.('content-type') || '';
       const body = await response.text();
       const result = {
-        provider: 'txodds',
+        provider: this.provider,
         configured: true,
         matches: parseTxOddsFixtures(body, { contentType, assumeLive: true }),
         fetchedAt: this.now(),
@@ -159,7 +188,7 @@ export class TxOddsLiveService {
       return result;
     } catch (error) {
       return {
-        ...(this.cache || { provider: 'txodds', configured: true, matches: [], fetchedAt: null }),
+        ...(this.cache || { provider: this.provider, configured: true, matches: [], fetchedAt: null }),
         error: error.message,
         message: 'TxOdds is temporarily unavailable; showing the last successful fixture list.',
       };

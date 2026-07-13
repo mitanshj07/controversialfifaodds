@@ -190,6 +190,7 @@ export class RoomManager extends EventEmitter {
     room.on('callSettled', (settlement) =>
       this.emit('callSettled', { roomCode: code, settlement }));
     room.on('restarted', (replay) => this.emit('restarted', { roomCode: code, replay }));
+    room.on('matchEnded', (result) => this.emit('matchEnded', { roomCode: code, result }));
     return room;
   }
 }

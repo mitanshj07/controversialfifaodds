@@ -108,6 +108,35 @@ test('settles one immutable vote per participant and awards streak bonuses', () 
   assert.equal(room.participants.get(alice.id).streak, 2);
 });
 
+test('publishes a full-time result with final score and locks any open call', () => {
+  const { room, alice } = setupRoom();
+  room.processFeedEvent(feedEvent(1, 'open-final', FeedEventType.BIG_CALL_OPENED, 10_000, {
+    callId: 'call-final', title: 'Final check', windowMs: 20_000,
+  }));
+  room.castVote({ participantId: alice.id, callId: 'call-final', choice: 'stands' });
+
+  let ended;
+  room.once('matchEnded', (result) => { ended = result; });
+  room.processFeedEvent(feedEvent(1, 'final', FeedEventType.MATCH_ENDED, 90_000, {
+    phase: 'full_time',
+    homeScore: 2,
+    awayScore: 1,
+    statusId: 100,
+    period: 100,
+    outcome: 'home',
+    message: 'Full-time: Home win.',
+  }));
+
+  const state = room.snapshot(alice.id);
+  assert.equal(state.match.clock, 'FT');
+  assert.equal(state.match.phase, 'full_time');
+  assert.deepEqual(state.match.result, ended);
+  assert.equal(state.match.result.homeScore, 2);
+  assert.equal(state.match.result.awayScore, 1);
+  assert.equal(state.activeCall.status, 'locked');
+  assert.equal(state.replay.status, 'playing');
+});
+
 test('restart creates a clean generation and rejects stale replay events', () => {
   const { room, alice } = setupRoom();
   room.processFeedEvent(feedEvent(1, 'score', FeedEventType.SCORE_CHANGED, 5_000, {

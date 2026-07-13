@@ -30,6 +30,30 @@ test('normalizes JSON TxOdds fixtures into the live-match contract', () => {
   });
 });
 
+test('normalizes the current TxLINE fixture snapshot shape and game states', () => {
+  const [fixture] = parseTxOddsFixtures(JSON.stringify([{
+    FixtureId: 17952170,
+    StartTime: '2026-07-13T18:00:00Z',
+    Participant1: 'Away Listed First',
+    Participant2: 'Home Listed Second',
+    Participant1IsHome: false,
+    CompetitionName: 'World Cup',
+    GameState: 4,
+  }]), { assumeLive: false });
+  assert.deepEqual(fixture, {
+    id: '17952170',
+    home: 'Home Listed Second',
+    away: 'Away Listed First',
+    competition: 'World Cup',
+    startTime: '2026-07-13T18:00:00Z',
+    status: 'live',
+    live: true,
+    minute: null,
+    homeScore: null,
+    awayScore: null,
+  });
+});
+
 test('parses the legacy TxOdds XML fixture response', () => {
   const xml = '<Fixtures><Match ID="99" Live="true" MatchTime="2026-07-13T18:00:00Z"><Home>Northport</Home><Away>Sierra Republic</Away><League>Demo Cup</League></Match></Fixtures>';
   const [fixture] = parseTxOddsFixtures(xml, { contentType: 'application/xml' });
@@ -53,6 +77,23 @@ test('returns an honest unconfigured state without fabricating fixtures', async 
   assert.equal(result.configured, false);
   assert.deepEqual(result.matches, []);
   assert.match(result.message, /TXODDS_FIXTURES_URL/);
+});
+
+test('derives the official TxLINE fixture snapshot endpoint from server credentials', async () => {
+  const service = new TxOddsLiveService({
+    baseUrl: 'https://txline-dev.txodds.com',
+    jwt: 'guest-jwt',
+    apiToken: 'api-token',
+    fetchFn: async (url) => ({
+      ok: true,
+      headers: { get: () => 'application/json' },
+      text: async () => JSON.stringify([{ FixtureId: 1, Participant1: 'A', Participant2: 'B', Participant1IsHome: true, GameState: 1 }]),
+      url: String(url),
+    }),
+  });
+  assert.equal(service.configured, true);
+  const result = await service.list();
+  assert.equal(result.matches[0].status, 'scheduled');
 });
 
 test('caches a successful fixture response and sends credentials server-side', async () => {

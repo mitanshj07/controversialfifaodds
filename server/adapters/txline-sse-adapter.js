@@ -30,6 +30,37 @@ export function normaliseTxLineRecord(raw, sseId = null) {
   const clock = first(raw?.clock, raw?.Clock, data?.Clock);
   const minute = asNumber(first(raw?.minute, raw?.Minute, clock?.Minute, clock?.minute));
   const occurredAtMs = asNumber(first(raw?.ts, raw?.TS, raw?.timestamp, raw?.Timestamp)) || Date.now();
+  const score = first(raw?.score, raw?.Score, raw?.scores, raw?.Scores, data?.score, data?.Score, data?.scores, data?.Scores, {});
+  const homeScore = asNumber(first(
+    raw?.homeScore,
+    raw?.HomeScore,
+    raw?.scoreHome,
+    raw?.ScoreH,
+    data?.homeScore,
+    data?.HomeScore,
+    data?.ScoreH,
+    score?.home,
+    score?.Home,
+    score?.homeScore,
+    score?.HomeScore,
+    score?.participant1,
+    score?.Participant1,
+  ));
+  const awayScore = asNumber(first(
+    raw?.awayScore,
+    raw?.AwayScore,
+    raw?.scoreAway,
+    raw?.ScoreA,
+    data?.awayScore,
+    data?.AwayScore,
+    data?.ScoreA,
+    score?.away,
+    score?.Away,
+    score?.awayScore,
+    score?.AwayScore,
+    score?.participant2,
+    score?.Participant2,
+  ));
   const reviewType = first(data?.Type, data?.type, raw?.reviewType, null);
   const outcome = first(data?.Outcome, data?.outcome, raw?.outcome, null);
 
@@ -45,8 +76,11 @@ export function normaliseTxLineRecord(raw, sseId = null) {
     occurredAtMs,
     receivedAtMs: Date.now(),
     confirmed: asBoolean(first(raw?.confirmed, raw?.Confirmed, data?.Confirmed, null)),
-    gameState: first(raw?.gameState, raw?.GameState, null),
-    statusId: asNumber(first(raw?.statusId, raw?.StatusId)),
+    gameState: first(raw?.gameState, raw?.GameState, data?.gameState, data?.GameState, null),
+    statusId: asNumber(first(raw?.statusId, raw?.StatusId, data?.statusId, data?.StatusId)),
+    period: asNumber(first(raw?.period, raw?.Period, data?.period, data?.Period)),
+    homeScore,
+    awayScore,
     minute,
     participant: asNumber(first(raw?.participant, raw?.Participant, data?.Participant)),
     var: {
@@ -152,6 +186,7 @@ export class TxLineSseAdapter {
     this.actions = new Map();
     this.activeReviewByFixture = new Map();
     this.startedAt = null;
+    this.ended = false;
   }
 
   start(sink) {
@@ -162,6 +197,7 @@ export class TxLineSseAdapter {
     this.stop();
     this.generation += 1;
     this.startedAt = this.now();
+    this.ended = false;
     const controller = new AbortController();
     this.controller = controller;
     this.#connectLoop(controller.signal).catch((error) => {
@@ -179,6 +215,7 @@ export class TxLineSseAdapter {
     this.actions.clear();
     this.activeReviewByFixture.clear();
     this.lastEventId = null;
+    this.ended = false;
     return this.start();
   }
 
@@ -232,6 +269,7 @@ export class TxLineSseAdapter {
   }
 
   #handleRecord(record) {
+    if (this.ended) return;
     const dedupKey = `${record.fixtureId}:${record.seq}`;
     if (this.processed.has(dedupKey)) return;
     this.processed.add(dedupKey);
@@ -239,6 +277,70 @@ export class TxLineSseAdapter {
 
     const actionKey = `${record.fixtureId}:${record.actionId ?? record.seq}`;
     this.actions.set(actionKey, record);
+
+    const offsetMs = Math.max(0, record.receivedAtMs - this.startedAt);
+    if (record.homeScore !== null || record.awayScore !== null) {
+      this.sink.onEvent({
+        ...normalizedEvent({
+          id: `${dedupKey}:score`,
+          type: FeedEventType.SCORE_CHANGED,
+          offsetMs,
+          payload: {
+            homeScore: record.homeScore,
+            awayScore: record.awayScore,
+            minute: record.minute,
+            source: { fixtureId: record.fixtureId, seq: record.seq, sseId: record.sseId },
+          },
+        }),
+        generation: this.generation,
+      });
+    }
+
+    const finalised = record.action === 'game_finalised'
+      || (record.statusId === 100 && record.period === 100);
+    if (finalised) {
+      const outcome = record.homeScore === null || record.awayScore === null
+        ? null
+        : record.homeScore === record.awayScore
+          ? 'draw'
+          : record.homeScore > record.awayScore ? 'home' : 'away';
+      this.sink.onEvent({
+        ...normalizedEvent({
+          id: `${dedupKey}:ended`,
+          type: FeedEventType.MATCH_ENDED,
+          offsetMs,
+          payload: {
+            phase: 'full_time',
+            homeScore: record.homeScore,
+            awayScore: record.awayScore,
+            outcome,
+            statusId: record.statusId,
+            period: record.period,
+            fixtureId: record.fixtureId,
+            seq: record.seq,
+            source: 'txline',
+            message: 'Full-time: TxLINE marked the fixture as final.',
+          },
+        }),
+        generation: this.generation,
+      });
+      this.ended = true;
+      this.#emitClock('ended', record);
+      this.sink.onEnd({
+        generation: this.generation,
+        status: 'ended',
+        startedAt: this.startedAt,
+        elapsedMs: offsetMs,
+        durationMs: offsetMs,
+        progress: 1,
+        playbackRate: 1,
+        minute: record.minute,
+        matchClock: 'FT',
+      });
+      this.stop();
+      return;
+    }
+
     this.#emitClock('playing', record);
 
     if (record.action === 'action_discarded') {

@@ -123,6 +123,11 @@ export const DEMO_EVENTS = Object.freeze([
   event('demo-match-ended', FeedEventType.MATCH_ENDED, 120_000, {
     phase: 'full_time',
     minute: 90,
+    homeScore: 1,
+    awayScore: 1,
+    statusId: 100,
+    period: 100,
+    outcome: 'draw',
     message: 'Full-time: Aurora FC 1–1 Metro United.',
   }),
 ]);

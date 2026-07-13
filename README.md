@@ -88,6 +88,7 @@ Server events:
 - `room:state`
 - `call:opened`
 - `call:settled`
+- `match:ended`
 - `replay:restarted`
 
 Contest-linked rooms require contest membership and do not allow participant replay restarts. Entry debit plus seat reservation is atomic and idempotent. Room playback is deferred until the authoritative entry deadline. Votes are immutable and checked against wall-clock cutoff time even between replay ticks. Live crowd choices and counts are withheld until a call settles.
@@ -109,7 +110,7 @@ X-Api-Token: <activated-api-token>
 Last-Event-ID: <optional-resume-cursor>
 ```
 
-It deduplicates deliveries by `fixtureId:seq`, preserves the SSE cursor, handles heartbeats and reconnects, opens calls from `var`, and settles only a confirmed `var_end` containing `Stands` or `Overturned`. The adapter is present but not selected automatically: live mode still needs fixture discovery and valid TxLINE credentials. Keep those credentials on the server.
+It deduplicates deliveries by `fixtureId:seq`, preserves the SSE cursor, handles heartbeats and reconnects, opens calls from `var`, settles only a confirmed `var_end` containing `Stands` or `Overturned`, and finalises a room from TxLINE's `game_finalised` marker (`statusId=100`, `period=100`). The server selects this adapter automatically when `TXLINE_GUEST_JWT`, `TXLINE_API_TOKEN`, and `TXLINE_FIXTURE_ID` are all present; otherwise it uses the deterministic demo replay. Keep those credentials on the server.
 
 Mainnet free service level `1` is documented as 60 seconds delayed; a 15-second live jury requires real-time level `12` or a verified zero-delay devnet service row.
 
