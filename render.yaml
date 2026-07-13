@@ -20,3 +20,14 @@ services:
         value: 6MS566y46t3C37p7TnnK7yieoSbLimWEwwKemXxFMJ5A
       - key: CONTEST_ENTRY_WINDOW_MS
         value: "20000"
+      # TxLINE World Cup free-tier credentials are intentionally supplied in
+      # Render's secret environment UI after on-chain activation. Never place
+      # their values in this repository or in Vercel.
+      - key: TXLINE_BASE_URL
+        value: https://txline-dev.txodds.com
+      - key: TXLINE_GUEST_JWT
+        sync: false
+      - key: TXLINE_API_TOKEN
+        sync: false
+      - key: TXLINE_FIXTURE_ID
+        sync: false

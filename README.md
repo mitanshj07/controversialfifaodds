@@ -525,6 +525,10 @@ TXLINE_BASE_URL + TXLINE_GUEST_JWT + TXLINE_API_TOKEN
 TXODDS_FIXTURES_URL + TXODDS_USER_ID + TXODDS_PASSWORD
 ```
 
+For the Solana hackathon activation, Render setup, and pre-demo verification,
+see [HACKATHON_SETUP.md](HACKATHON_SETUP.md). Keep all TxLINE credentials on
+the server.
+
 ---
 
 <div align="center">

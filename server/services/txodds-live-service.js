@@ -28,6 +28,9 @@ const statusFromGameState = (value) => {
   const text = asText(value).toLowerCase();
   const numeric = Number(value);
   if (numeric === 1 || text === 'ns' || text.includes('scheduled')) return 'scheduled';
+  // Current fixture snapshots use 6 for a cancelled fixture. Score-feed phase
+  // values are handled separately by the TxLINE SSE adapter.
+  if (numeric === 6 || text === 'c' || text.includes('cancel')) return 'cancelled';
   if ([2, 3, 4, 7, 8, 9, 12, 14].includes(numeric) || ['h1', 'ht', 'h2', 'et1', 'htet', 'et2', 'pe'].includes(text)) return 'live';
   if ([5, 10, 13].includes(numeric) || ['f', 'fet', 'fpe', 'ft', 'final', 'completed'].includes(text)) return 'completed';
   return '';
@@ -136,14 +139,16 @@ export class TxOddsLiveService {
     cacheTtlMs = Number(process.env.TXODDS_FIXTURES_CACHE_MS) || 60_000,
     now = Date.now,
   } = {}) {
+    this.baseUrl = String(baseUrl || 'https://txline-dev.txodds.com').replace(/\/$/, '');
     this.fixturesUrl = fixturesUrl || (jwt && apiToken
-      ? `${String(baseUrl || 'https://txline-dev.txodds.com').replace(/\/$/, '')}/api/fixtures/snapshot`
+      ? `${this.baseUrl}/api/fixtures/snapshot`
       : '');
     this.userId = userId;
     this.password = password;
     this.jwt = jwt;
     this.apiToken = apiToken;
-    this.provider = this.fixturesUrl.includes('/api/fixtures/') ? 'txline' : 'txodds';
+    this.usesLegacyTxOdds = Boolean(this.fixturesUrl) && !this.fixturesUrl.includes('/api/fixtures/');
+    this.provider = this.usesLegacyTxOdds ? 'txodds' : 'txline';
     this.fetchFn = fetchFn;
     this.cacheTtlMs = cacheTtlMs;
     this.now = now;
@@ -154,14 +159,33 @@ export class TxOddsLiveService {
     return Boolean(this.fixturesUrl);
   }
 
+  get setup() {
+    const fixtureDiscoveryConfigured = Boolean(this.jwt && this.apiToken);
+    const missing = this.usesLegacyTxOdds
+      ? []
+      : [
+          ...(this.jwt ? [] : ['TXLINE_GUEST_JWT']),
+          ...(this.apiToken ? [] : ['TXLINE_API_TOKEN']),
+        ];
+    return {
+      provider: this.provider,
+      mode: this.usesLegacyTxOdds ? 'legacy_txodds' : 'txline',
+      baseUrl: this.usesLegacyTxOdds ? null : this.baseUrl,
+      fixtureDiscoveryConfigured: this.usesLegacyTxOdds || fixtureDiscoveryConfigured,
+      missing,
+      activationGuide: 'https://txline-docs.txodds.com/documentation/worldcup',
+    };
+  }
+
   async list({ force = false } = {}) {
     if (!this.configured) {
       return {
         provider: this.provider,
         configured: false,
+        setup: this.setup,
         matches: [],
         fetchedAt: null,
-        message: 'Configure TXODDS_FIXTURES_URL or activate TXLINE_GUEST_JWT and TXLINE_API_TOKEN on the server to load live fixtures.',
+        message: 'Activate TXLINE and set TXLINE_GUEST_JWT plus TXLINE_API_TOKEN on the server, or configure the legacy TXODDS_FIXTURES_URL.',
       };
     }
     if (!force && this.cache && this.now() - this.cache.fetchedAt < this.cacheTtlMs) return this.cache;
@@ -180,6 +204,7 @@ export class TxOddsLiveService {
       const result = {
         provider: this.provider,
         configured: true,
+        setup: this.setup,
         matches: parseTxOddsFixtures(body, { contentType, assumeLive: true }),
         fetchedAt: this.now(),
         message: null,
@@ -188,7 +213,7 @@ export class TxOddsLiveService {
       return result;
     } catch (error) {
       return {
-        ...(this.cache || { provider: this.provider, configured: true, matches: [], fetchedAt: null }),
+        ...(this.cache || { provider: this.provider, configured: true, setup: this.setup, matches: [], fetchedAt: null }),
         error: error.message,
         message: 'TxOdds is temporarily unavailable; showing the last successful fixture list.',
       };

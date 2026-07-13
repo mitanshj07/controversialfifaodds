@@ -118,6 +118,14 @@ export function createTheCallServer({
   });
   const contests = new ContestManager({ match: DEMO_MATCH, entryWindowMs });
   const txOddsLive = new TxOddsLiveService();
+  const txLineSetup = {
+    ...txOddsLive.setup,
+    streamConfigured: txLineConfigured,
+    missing: [
+      ...txOddsLive.setup.missing,
+      ...(process.env.TXLINE_FIXTURE_ID ? [] : ['TXLINE_FIXTURE_ID']),
+    ],
+  };
   const solanaConnection = new Connection(solanaRpcUrl, 'confirmed');
   const treasuryPublicKey = new PublicKey(treasuryWallet);
 
@@ -138,8 +146,8 @@ export function createTheCallServer({
     replay: { source: txLineConfigured ? 'txline' : 'scripted', playbackRate },
     contests: { entryWindowMs: contests.entryWindowMs },
     solana: { network: solanaNetwork, treasuryWallet: treasuryPublicKey.toBase58() },
-    txodds: { configured: txOddsLive.configured },
-    txline: { configured: txLineConfigured },
+    txodds: { configured: txOddsLive.usesLegacyTxOdds && txOddsLive.configured },
+    txline: { configured: txLineConfigured, ...txLineSetup },
     ...manager.health(),
   });
   app.get('/health', health);

@@ -71,12 +71,25 @@ test('keeps a scheduled TxOdds XML fixture out of the live state', () => {
   assert.equal(fixture.live, false);
 });
 
+test('labels a cancelled current TxLINE fixture instead of treating it as live', () => {
+  const [fixture] = parseTxOddsFixtures(JSON.stringify([{
+    FixtureId: 101,
+    Participant1: 'A',
+    Participant2: 'B',
+    Participant1IsHome: true,
+    GameState: 6,
+  }]));
+  assert.equal(fixture.status, 'cancelled');
+  assert.equal(fixture.live, false);
+});
+
 test('returns an honest unconfigured state without fabricating fixtures', async () => {
   const service = new TxOddsLiveService({ fixturesUrl: '' });
   const result = await service.list();
   assert.equal(result.configured, false);
   assert.deepEqual(result.matches, []);
-  assert.match(result.message, /TXODDS_FIXTURES_URL/);
+  assert.deepEqual(result.setup.missing, ['TXLINE_GUEST_JWT', 'TXLINE_API_TOKEN']);
+  assert.match(result.message, /TXLINE_GUEST_JWT/);
 });
 
 test('derives the official TxLINE fixture snapshot endpoint from server credentials', async () => {
@@ -93,6 +106,8 @@ test('derives the official TxLINE fixture snapshot endpoint from server credenti
   });
   assert.equal(service.configured, true);
   const result = await service.list();
+  assert.equal(result.setup.fixtureDiscoveryConfigured, true);
+  assert.equal(result.setup.baseUrl, 'https://txline-dev.txodds.com');
   assert.equal(result.matches[0].status, 'scheduled');
 });
 
