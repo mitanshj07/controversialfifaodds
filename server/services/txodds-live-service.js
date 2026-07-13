@@ -1,3 +1,5 @@
+import { createTxLineGuestJwt, normaliseBaseUrl } from './txline-auth.js';
+
 const first = (...values) => values.find((value) => value !== undefined && value !== null && value !== '');
 
 const asText = (value) => String(value ?? '').trim();
@@ -136,17 +138,20 @@ export class TxOddsLiveService {
     jwt = process.env.TXLINE_GUEST_JWT || '',
     apiToken = process.env.TXLINE_API_TOKEN || '',
     fetchFn = fetch,
+    guestJwtFactory = createTxLineGuestJwt,
     cacheTtlMs = Number(process.env.TXODDS_FIXTURES_CACHE_MS) || 60_000,
     now = Date.now,
   } = {}) {
-    this.baseUrl = String(baseUrl || 'https://txline-dev.txodds.com').replace(/\/$/, '');
-    this.fixturesUrl = fixturesUrl || (jwt && apiToken
+    this.baseUrl = normaliseBaseUrl(baseUrl);
+    this.fixturesUrl = fixturesUrl || (apiToken
       ? `${this.baseUrl}/api/fixtures/snapshot`
       : '');
     this.userId = userId;
     this.password = password;
     this.jwt = jwt;
     this.apiToken = apiToken;
+    this.guestJwtFactory = guestJwtFactory;
+    this.guestJwtPromise = null;
     this.usesLegacyTxOdds = Boolean(this.fixturesUrl) && !this.fixturesUrl.includes('/api/fixtures/');
     this.provider = this.usesLegacyTxOdds ? 'txodds' : 'txline';
     this.fetchFn = fetchFn;
@@ -160,11 +165,10 @@ export class TxOddsLiveService {
   }
 
   get setup() {
-    const fixtureDiscoveryConfigured = Boolean(this.jwt && this.apiToken);
+    const fixtureDiscoveryConfigured = Boolean(this.apiToken);
     const missing = this.usesLegacyTxOdds
       ? []
       : [
-          ...(this.jwt ? [] : ['TXLINE_GUEST_JWT']),
           ...(this.apiToken ? [] : ['TXLINE_API_TOKEN']),
         ];
     return {
@@ -185,7 +189,7 @@ export class TxOddsLiveService {
         setup: this.setup,
         matches: [],
         fetchedAt: null,
-        message: 'Activate TXLINE and set TXLINE_GUEST_JWT plus TXLINE_API_TOKEN on the server, or configure the legacy TXODDS_FIXTURES_URL.',
+        message: 'Activate TXLINE and set TXLINE_API_TOKEN on the server, or configure the legacy TXODDS_FIXTURES_URL.',
       };
     }
     if (!force && this.cache && this.now() - this.cache.fetchedAt < this.cacheTtlMs) return this.cache;
@@ -195,7 +199,8 @@ export class TxOddsLiveService {
       if (this.userId) url.searchParams.set('UserID', this.userId);
       if (this.password) url.searchParams.set('PassID', this.password);
       const headers = { Accept: 'application/json, application/xml, text/xml' };
-      if (this.jwt) headers.Authorization = `Bearer ${this.jwt}`;
+      const jwt = this.usesLegacyTxOdds ? this.jwt : await this.#guestJwt();
+      if (jwt) headers.Authorization = `Bearer ${jwt}`;
       if (this.apiToken) headers['X-Api-Token'] = this.apiToken;
       const response = await this.fetchFn(url, { headers });
       if (!response.ok) throw new Error(`TxOdds fixture request failed with ${response.status}.`);
@@ -218,5 +223,21 @@ export class TxOddsLiveService {
         message: 'TxOdds is temporarily unavailable; showing the last successful fixture list.',
       };
     }
+  }
+
+  async #guestJwt() {
+    if (this.jwt) return this.jwt;
+    if (!this.guestJwtPromise) {
+      this.guestJwtPromise = this.guestJwtFactory({
+        baseUrl: this.baseUrl,
+        fetchFn: this.fetchFn,
+      }).then((token) => {
+        this.jwt = token;
+        return token;
+      }).finally(() => {
+        this.guestJwtPromise = null;
+      });
+    }
+    return this.guestJwtPromise;
   }
 }

@@ -18,8 +18,10 @@ Socket events:
 `GET /api/live-matches` is the server-side TxOdds/TxLINE fixture discovery
 endpoint used by the separate Live Matches lobby section. It returns normalized
 fixture cards without exposing credentials to the browser. For the current
-TxLINE API, set `TXLINE_BASE_URL`, `TXLINE_GUEST_JWT`, and
-`TXLINE_API_TOKEN`; the service derives `/api/fixtures/snapshot`. A legacy XML
+TxLINE API, set `TXLINE_BASE_URL` and the activated `TXLINE_API_TOKEN`; the
+service starts and refreshes a guest JWT server-side, then derives
+`/api/fixtures/snapshot`. `TXLINE_GUEST_JWT` is an optional server-side
+override. A legacy XML
 subscription can instead set `TXODDS_FIXTURES_URL` plus its server-side
 `TXODDS_USER_ID` and `TXODDS_PASSWORD`. When neither mode is configured, the
 endpoint returns an explicit unconfigured state rather than inventing fixtures.

@@ -88,8 +88,30 @@ test('returns an honest unconfigured state without fabricating fixtures', async 
   const result = await service.list();
   assert.equal(result.configured, false);
   assert.deepEqual(result.matches, []);
-  assert.deepEqual(result.setup.missing, ['TXLINE_GUEST_JWT', 'TXLINE_API_TOKEN']);
-  assert.match(result.message, /TXLINE_GUEST_JWT/);
+  assert.deepEqual(result.setup.missing, ['TXLINE_API_TOKEN']);
+  assert.match(result.message, /TXLINE_API_TOKEN/);
+});
+
+test('starts a server-side guest session when only the activated API token is configured', async () => {
+  const requests = [];
+  const service = new TxOddsLiveService({
+    baseUrl: 'https://txline-dev.txodds.com',
+    apiToken: 'api-token',
+    guestJwtFactory: async () => 'fresh-guest-jwt',
+    fetchFn: async (url, options) => {
+      requests.push({ url: String(url), options });
+      return {
+        ok: true,
+        headers: { get: () => 'application/json' },
+        text: async () => JSON.stringify([{ FixtureId: 2, Participant1: 'A', Participant2: 'B', Participant1IsHome: true, GameState: 1 }]),
+      };
+    },
+  });
+  const result = await service.list();
+  assert.equal(result.configured, true);
+  assert.equal(result.setup.fixtureDiscoveryConfigured, true);
+  assert.equal(requests[0].options.headers.Authorization, 'Bearer fresh-guest-jwt');
+  assert.equal(requests[0].options.headers['X-Api-Token'], 'api-token');
 });
 
 test('derives the official TxLINE fixture snapshot endpoint from server credentials', async () => {

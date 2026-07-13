@@ -25,8 +25,6 @@ services:
       # their values in this repository or in Vercel.
       - key: TXLINE_BASE_URL
         value: https://txline-dev.txodds.com
-      - key: TXLINE_GUEST_JWT
-        sync: false
       - key: TXLINE_API_TOKEN
         sync: false
       - key: TXLINE_FIXTURE_ID

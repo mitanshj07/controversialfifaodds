@@ -1,4 +1,5 @@
 import { FeedEventType, normalizedEvent } from './feed-adapter.js';
+import { createTxLineGuestJwt, normaliseBaseUrl } from '../services/txline-auth.js';
 
 const sleep = (ms, signal) => new Promise((resolve, reject) => {
   const timer = setTimeout(resolve, ms);
@@ -167,15 +168,18 @@ export class TxLineSseAdapter {
     fixtureId = null,
     voteWindowMs = 15_000,
     fetchFn = fetch,
+    guestJwtFactory = createTxLineGuestJwt,
     now = Date.now,
   }) {
-    if (!jwt || !apiToken) throw new Error('TxLINE JWT and activated API token are required.');
-    this.baseUrl = baseUrl.replace(/\/$/, '');
+    if (!apiToken) throw new Error('An activated TxLINE API token is required.');
+    this.baseUrl = normaliseBaseUrl(baseUrl);
     this.jwt = jwt;
     this.apiToken = apiToken;
     this.fixtureId = fixtureId;
     this.voteWindowMs = voteWindowMs;
     this.fetchFn = fetchFn;
+    this.guestJwtFactory = guestJwtFactory;
+    this.guestJwtPromise = null;
     this.now = now;
     this.generation = 0;
     this.sink = null;
@@ -228,8 +232,9 @@ export class TxLineSseAdapter {
     while (!signal.aborted) {
       try {
         const query = this.fixtureId == null ? '' : `?fixtureId=${encodeURIComponent(this.fixtureId)}`;
+        const jwt = await this.#guestJwt();
         const headers = {
-          Authorization: `Bearer ${this.jwt}`,
+          Authorization: `Bearer ${jwt}`,
           'X-Api-Token': this.apiToken,
           Accept: 'text/event-stream',
           'Cache-Control': 'no-cache',
@@ -240,7 +245,12 @@ export class TxLineSseAdapter {
           headers,
           signal,
         });
-        if (response.status === 401) throw new Error('TxLINE JWT expired; refresh it on the same network host.');
+        if (response.status === 401) {
+          // Guest JWTs expire independently of the activated API token. Start a
+          // fresh guest session and reconnect without taking the live room down.
+          this.jwt = null;
+          continue;
+        }
         if (response.status === 403) throw new Error('TxLINE subscription is invalid, expired, or on the wrong network.');
         if (!response.ok) throw new Error(`TxLINE stream failed with ${response.status}.`);
 
@@ -266,6 +276,22 @@ export class TxLineSseAdapter {
         this.retryMs = Math.min(15_000, this.retryMs * 2);
       }
     }
+  }
+
+  async #guestJwt() {
+    if (this.jwt) return this.jwt;
+    if (!this.guestJwtPromise) {
+      this.guestJwtPromise = this.guestJwtFactory({
+        baseUrl: this.baseUrl,
+        fetchFn: this.fetchFn,
+      }).then((token) => {
+        this.jwt = token;
+        return token;
+      }).finally(() => {
+        this.guestJwtPromise = null;
+      });
+    }
+    return this.guestJwtPromise;
   }
 
   #handleRecord(record) {

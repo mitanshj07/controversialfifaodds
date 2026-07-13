@@ -94,8 +94,7 @@ export function createTheCallServer({
   });
 
   const txLineConfigured = Boolean(
-    process.env.TXLINE_GUEST_JWT
-    && process.env.TXLINE_API_TOKEN
+    process.env.TXLINE_API_TOKEN
     && process.env.TXLINE_FIXTURE_ID,
   );
 

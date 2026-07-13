@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mapVarKind, normaliseTxLineRecord } from './txline-sse-adapter.js';
+import { TxLineSseAdapter, mapVarKind, normaliseTxLineRecord } from './txline-sse-adapter.js';
 
 test('normalises TxLINE casing and VAR outcome fields', () => {
   const record = normaliseTxLineRecord({
@@ -41,4 +41,12 @@ test('normalises TxLINE game finalisation markers and final scores', () => {
   assert.equal(record.period, 100);
   assert.equal(record.homeScore, 2);
   assert.equal(record.awayScore, 1);
+});
+
+test('allows the server to create a guest JWT when the activated API token is present', () => {
+  assert.doesNotThrow(() => new TxLineSseAdapter({
+    baseUrl: 'https://txline-dev.txodds.com',
+    apiToken: 'activated-api-token',
+    fixtureId: 42,
+  }));
 });

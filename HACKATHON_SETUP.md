@@ -37,20 +37,20 @@ The fixture snapshot and score stream require both headers. Refer to the
 and [troubleshooting](https://txline-docs.txodds.com/documentation/examples/troubleshooting)
 pages if activation fails.
 
-## 3. Add secrets to Render
+## 3. Add the durable secret to Render
 
 Open the `controversialfifaodds` Render service, choose **Environment**, and
 set these server-only values:
 
 ```env
 TXLINE_BASE_URL=https://txline-dev.txodds.com
-TXLINE_GUEST_JWT=<guest JWT>
 TXLINE_API_TOKEN=<activated API token>
 TXLINE_FIXTURE_ID=<a FixtureId returned by the snapshot>
 ```
 
-`TXLINE_GUEST_JWT` and `TXLINE_API_TOKEN` populate the upcoming/live fixture
-board. `TXLINE_FIXTURE_ID` additionally selects the fixture whose score stream
+The app starts and refreshes its guest JWT server-side, so the activated
+`TXLINE_API_TOKEN` is the only authentication secret that needs to live in
+Render. `TXLINE_FIXTURE_ID` additionally selects the fixture whose score stream
 drives the live jury room. Never put these values in Vercel, the browser, a
 commit, or a public hackathon submission.
 

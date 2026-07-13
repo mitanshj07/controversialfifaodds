@@ -42,6 +42,7 @@
 .lobby-connection { margin-left: auto; padding: 5px 8px; border: 1px solid #3a3833; color: #8a857b; font: 800 8px/1 'JetBrains Mono', monospace; letter-spacing: .1em; }
 .lobby-connection i { width: 6px; height: 6px; display: inline-block; margin-right: 6px; border-radius: 50%; background: #8a857b; }
 .lobby-connection.is-live { color: #c8f02d; }.lobby-connection.is-live i { background: #c8f02d; box-shadow: 0 0 8px #c8f02d; }
+.lobby-wallet .wallet-adapter-button { min-height: 40px; padding: 0 10px; border: 1px solid #3a3833; border-radius: 0; background: #2b1fcc; color: #fff; font: 800 8px/1 'JetBrains Mono', monospace; letter-spacing: .06em; }.lobby-wallet .wallet-adapter-button:hover { background: #c8f02d; color: #0d0d0b; }.lobby-wallet .wallet-adapter-button-trigger { background: #2b1fcc; }
 .balance-pill { min-width: 112px; padding: 7px 10px; display: flex; flex-direction: column; align-items: flex-end; border: 1px solid #3a3833; color: #e8e4d9; }
 .balance-pill small { color: #8a857b; font: 700 6px/1 'JetBrains Mono', monospace; letter-spacing: .12em; }.balance-pill strong { margin-top: 4px; color: #c8f02d; font: 800 11px/1 'JetBrains Mono', monospace; }
 
@@ -109,7 +110,7 @@
 .mobile-nav { height: 64px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; display: none; grid-template-columns: repeat(4,1fr); background: #0d0d0b; color: #8a857b; border-top: 2px solid #3a3833; }.mobile-nav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; font: 800 7px/1 'JetBrains Mono', monospace; }.mobile-nav button i { font-style: normal; font-size: 15px; }.mobile-nav button.is-active { color: #c8f02d; }.mobile-nav button:disabled { opacity: .35; cursor: not-allowed; }
 
 @media (max-width: 767px) {
-  .lobby-header { padding: 0 12px; }.lobby-brand small { display: none; }.lobby-connection { display: none; }.balance-pill { min-width: 104px; }
+  .lobby-header { padding: 0 12px; gap: 7px; }.lobby-brand small { display: none; }.lobby-connection, .lobby-wallet { display: none; }.balance-pill { min-width: 104px; }
   .practice-strip { justify-content: flex-start; font-size: 8px; }
   .lobby-main { padding: 14px 12px 30px; }
   .lobby-match { min-height: 148px; grid-template-columns: 1fr; padding: 20px; }.lobby-match h1 { max-width: 270px; font-size: 35px; }.match-countdown { display: none; }

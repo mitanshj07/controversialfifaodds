@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 
 export const FALLBACK_CONTESTS = [
@@ -514,6 +515,7 @@ export default function ContestLobby({
         <div className="lobby-brand"><LobbyMark /><div><strong>THE CALL</strong><small>CONTESTS</small></div></div>
         <span className={`lobby-connection ${connected ? "is-live" : ""}`}><i />{connected ? "LIVE" : "OFFLINE"}</span>
         <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div className="lobby-wallet"><WalletMultiButton /></div>
           <button className="balance-pill" type="button" onClick={() => setBuyPointsOpen(true)} style={{ background: "#4caf50", color: "#fff" }}><small>GET</small><strong>POINTS</strong></button>
           <button className="balance-pill" type="button" onClick={() => setBalanceOpen(true)}><small>BALANCE</small><strong>{credits(balance)}</strong></button>
         </div>

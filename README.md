@@ -499,12 +499,13 @@ Set these server-side env vars to activate:
 
 ```env
 TXLINE_BASE_URL=https://txline-dev.txodds.com
-TXLINE_GUEST_JWT=your-guest-jwt
 TXLINE_API_TOKEN=your-api-token
 TXLINE_FIXTURE_ID=12345
 ```
 
-When all three are present, the server **auto-selects the live adapter**. Otherwise, it falls back to the demo replay. The adapter:
+When the activated API token and fixture ID are present, the server
+**auto-selects the live adapter** and creates/refreshes its guest JWT on the
+server. Otherwise, it falls back to the demo replay. The adapter:
 
 - 🔄 Deduplicates by `fixtureId:seq`
 - 📍 Preserves SSE cursor for resume
@@ -519,7 +520,7 @@ When all three are present, the server **auto-selects the live adapter**. Otherw
 
 ```env
 # TxLINE mode (preferred)
-TXLINE_BASE_URL + TXLINE_GUEST_JWT + TXLINE_API_TOKEN
+TXLINE_BASE_URL + TXLINE_API_TOKEN
 
 # Legacy XML mode (fallback)
 TXODDS_FIXTURES_URL + TXODDS_USER_ID + TXODDS_PASSWORD
@@ -579,8 +580,8 @@ CONTEST_ENTRY_WINDOW_MS=20000         # Entry deadline (ms)
 # 📡 TxLINE LIVE MODE (server-side only)
 # ═══════════════════════════════════════
 TXLINE_BASE_URL=https://txline-dev.txodds.com
-TXLINE_GUEST_JWT=                     # Your guest JWT
-TXLINE_API_TOKEN=                     # Your API token
+TXLINE_GUEST_JWT=                     # Optional server-side override
+TXLINE_API_TOKEN=                     # Activated API token
 TXLINE_FIXTURE_ID=                    # Target fixture
 
 # ═══════════════════════════════════════
