@@ -47,6 +47,16 @@ export const FALLBACK_CONTESTS = [
 
 const credits = (value) => `${Number(value || 0).toLocaleString()} DC`;
 const SOLANA_TREASURY_WALLET = import.meta.env.VITE_SOLANA_TREASURY_WALLET || '6MS566y46t3C37p7TnnK7yieoSbLimWEwwKemXxFMJ5A';
+const SAVED_CONTESTS_KEY = "the-call-saved-contests-v1";
+
+function getSavedContestIds() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SAVED_CONTESTS_KEY) || "[]");
+    return Array.isArray(saved) ? saved.filter((id) => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 function useDialogFocus(open, onClose) {
   const dialogRef = useRef(null);
@@ -94,7 +104,7 @@ function LobbyMark() {
   return <span className="lobby-mark" aria-hidden="true"><i />TC</span>;
 }
 
-function ContestCard({ contest, onSelect, onEnterLive, now }) {
+function ContestCard({ contest, onSelect, onEnterLive, onToggleSave, saved, now }) {
   const joined = contest.membership?.joined === true || contest.joined === true;
   const full = contest.joinedCount >= contest.capacity;
   const free = Number(contest.entryCredits) === 0;
@@ -124,7 +134,10 @@ function ContestCard({ contest, onSelect, onEnterLive, now }) {
         <span className={`mode-label ${free ? "is-sponsored" : ""}`}>
           {free ? "FREE · SPONSOR-FUNDED" : `${contest.visibility?.toUpperCase() || "PUBLIC"} · PRACTICE`}
         </span>
-        {contest.featured ? <span className="featured-label">FEATURED</span> : null}
+        <div className="contest-card-actions">
+          {contest.featured ? <span className="featured-label">FEATURED</span> : null}
+          <button className={`save-contest-button ${saved ? "is-saved" : ""}`} type="button" aria-pressed={saved} onClick={() => onToggleSave(contest.id)}>{saved ? "SAVED ★" : "SAVE ☆"}</button>
+        </div>
       </div>
       <h3>{contest.name}</h3>
       <p>{contest.description || "Call the match’s biggest decisions and climb the live table."}</p>
@@ -471,6 +484,9 @@ export default function ContestLobby({
   const [balanceOpen, setBalanceOpen] = useState(false);
   const [buyPointsOpen, setBuyPointsOpen] = useState(false);
   const [scoringOpen, setScoringOpen] = useState(false);
+  const [savedContestIds, setSavedContestIds] = useState(getSavedContestIds);
+  const [contestQuery, setContestQuery] = useState("");
+  const [contestSort, setContestSort] = useState("featured");
   const [now, setNow] = useState(Date.now());
   const balance = wallet?.balanceCredits ?? 1000;
   const sharedEntryClosesAt = contests.find((contest) => contest.entryClosesAt)?.entryClosesAt;
@@ -489,10 +505,31 @@ export default function ContestLobby({
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem(SAVED_CONTESTS_KEY, JSON.stringify(savedContestIds));
+  }, [savedContestIds]);
+
   const shown = useMemo(() => {
-    if (tab === "mine") return contests.filter((contest) => contest.membership?.joined === true || contest.joined === true);
-    return contests.filter((contest) => contest.visibility !== "private");
-  }, [contests, tab]);
+    const normalizedQuery = contestQuery.trim().toLowerCase();
+    const candidates = tab === "mine"
+      ? contests.filter((contest) => contest.membership?.joined === true || contest.joined === true)
+      : tab === "saved"
+        ? contests.filter((contest) => savedContestIds.includes(contest.id))
+        : contests.filter((contest) => contest.visibility !== "private");
+    const matching = candidates.filter((contest) => !normalizedQuery || `${contest.name || ""} ${contest.description || ""}`.toLowerCase().includes(normalizedQuery));
+    return [...matching].sort((left, right) => {
+      if (contestSort === "prize") return Number(right.prizePoolCredits || 0) - Number(left.prizePoolCredits || 0);
+      if (contestSort === "entry") return Number(left.entryCredits || 0) - Number(right.entryCredits || 0);
+      if (contestSort === "spots") return (Number(right.capacity || 0) - Number(right.joinedCount || 0)) - (Number(left.capacity || 0) - Number(left.joinedCount || 0));
+      return Number(Boolean(right.featured)) - Number(Boolean(left.featured)) || Number(right.prizePoolCredits || 0) - Number(left.prizePoolCredits || 0);
+    });
+  }, [contests, contestQuery, contestSort, savedContestIds, tab]);
+
+  const toggleSavedContest = (contestId) => {
+    setSavedContestIds((current) => current.includes(contestId)
+      ? current.filter((id) => id !== contestId)
+      : [...current, contestId]);
+  };
 
   const confirmJoin = async (contest) => {
     setJoinPending(true);
@@ -563,6 +600,7 @@ export default function ContestLobby({
           <button id="contest-tab-live" role="tab" aria-selected={tab === "live"} aria-controls="contest-panel-live" className={tab === "live" ? "is-active" : ""} type="button" onClick={() => setTab("live")}>LIVE MATCHES</button>
           <button id="contest-tab-private" role="tab" aria-selected={tab === "private"} aria-controls="contest-panel-private" className={tab === "private" ? "is-active" : ""} type="button" onClick={() => setTab("private")}>PRIVATE</button>
           <button id="contest-tab-mine" role="tab" aria-selected={tab === "mine"} aria-controls="contest-panel-mine" className={tab === "mine" ? "is-active" : ""} type="button" onClick={() => setTab("mine")}>MY ENTRIES</button>
+          <button id="contest-tab-saved" role="tab" aria-selected={tab === "saved"} aria-controls="contest-panel-saved" className={tab === "saved" ? "is-active" : ""} type="button" onClick={() => setTab("saved")}>SAVED <span className="tab-count">{savedContestIds.length}</span></button>
         </nav>
 
         {tab === "live" ? (
@@ -570,9 +608,13 @@ export default function ContestLobby({
         ) : tab === "private" ? (
           <div id="contest-panel-private" role="tabpanel" aria-labelledby="contest-tab-private"><PrivateRoomPanel creationClosed={matchStatus !== "OPEN"} onCreateOpen={() => setCreateOpen(true)} onLookup={lookup} lookupPending={lookupPending} lookupError={lookupError} /></div>
         ) : (
-          <section id={`contest-panel-${tab}`} role="tabpanel" aria-labelledby={`contest-tab-${tab}`} className="contest-list" aria-label={tab === "mine" ? "My contests" : "Public contests"}>
-            <div className="list-heading"><div><span>{tab === "mine" ? "YOUR ROOMS" : "OPEN CONTESTS"}</span><h2>{tab === "mine" ? "My entries" : "Choose your stand"}</h2></div><small>{shown.length} contests</small></div>
-            {shown.length ? shown.map((contest) => <ContestCard key={contest.id} contest={contest} now={now} onSelect={(value) => { setJoinError(""); setSelected(value); }} onEnterLive={enterRoom} />) : <div className="empty-contests"><strong>NO ENTRIES YET</strong><p>Join a public contest or create a private room to see it here.</p></div>}
+          <section id={`contest-panel-${tab}`} role="tabpanel" aria-labelledby={`contest-tab-${tab}`} className="contest-list" aria-label={tab === "mine" ? "My contests" : tab === "saved" ? "Saved contests" : "Public contests"}>
+            <div className="list-heading"><div><span>{tab === "mine" ? "YOUR ROOMS" : tab === "saved" ? "YOUR WATCHLIST" : "OPEN CONTESTS"}</span><h2>{tab === "mine" ? "My entries" : tab === "saved" ? "Saved contests" : "Choose your stand"}</h2></div><small>{shown.length} contests</small></div>
+            <div className="contest-discovery" aria-label="Find contests">
+              <label><span>FIND A ROOM</span><input value={contestQuery} onChange={(event) => setContestQuery(event.target.value)} placeholder="Search by contest name" /></label>
+              <label><span>SORT BY</span><select value={contestSort} onChange={(event) => setContestSort(event.target.value)}><option value="featured">Featured</option><option value="prize">Highest prize</option><option value="entry">Lowest entry</option><option value="spots">Most spots left</option></select></label>
+            </div>
+            {shown.length ? shown.map((contest) => <ContestCard key={contest.id} contest={contest} now={now} saved={savedContestIds.includes(contest.id)} onToggleSave={toggleSavedContest} onSelect={(value) => { setJoinError(""); setSelected(value); }} onEnterLive={enterRoom} />) : <div className="empty-contests"><strong>{tab === "saved" ? "NO SAVED CONTESTS" : "NO CONTESTS FOUND"}</strong><p>{tab === "saved" ? "Use SAVE on any contest card to build your watchlist." : "Try a different search or sort option."}</p></div>}
           </section>
         )}
       </main>

@@ -64,13 +64,16 @@
 .contest-tabs { height: 52px; display: flex; align-items: stretch; gap: 0; border-bottom: 2px solid #0d0d0b; }
 .contest-tabs button { min-width: 132px; padding: 0 16px; color: #646057; font: 900 9px/1 'JetBrains Mono', monospace; letter-spacing: .08em; border-left: 1px solid #aaa59a; }
 .contest-tabs button:last-child { border-right: 1px solid #aaa59a; }.contest-tabs button.is-active { background: #0d0d0b; color: #c8f02d; }
+.tab-count { display: inline-grid; min-width: 15px; min-height: 15px; place-items: center; margin-left: 4px; background: #e63b2e; color: #fff; font-size: 7px; }
 
 .contest-list { padding-top: 24px; }
 .list-heading { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 16px; }.list-heading h2 { margin-top: 7px; font-size: 28px; letter-spacing: -.045em; }.list-heading small { color: #646057; font: 800 8px/1 'JetBrains Mono', monospace; }
+.contest-discovery { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 10px; padding: 12px; border: 2px solid #0d0d0b; background: #d9d5ca; }.contest-discovery label { display: block; }.contest-discovery label > span { display: block; margin-bottom: 6px; font: 900 7px/1 'JetBrains Mono', monospace; letter-spacing: .1em; }.contest-discovery input, .contest-discovery select { width: 100%; height: 38px; padding: 0 10px; border: 1px solid #0d0d0b; border-radius: 0; background: #f5f2ea; color: #0d0d0b; font: 800 10px/1 'JetBrains Mono', monospace; }
 .contest-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }.list-heading { grid-column: 1 / -1; }
 .contest-card { background: #f5f2ea; border: 2px solid #0d0d0b; padding: 18px; box-shadow: 4px 4px 0 rgba(13,13,11,.22); }
 .contest-card.is-featured { border-top: 6px solid #e63b2e; padding-top: 14px; }
 .contest-card-head { min-height: 24px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.contest-card-actions { display: flex; align-items: center; justify-content: flex-end; gap: 5px; }.save-contest-button { min-height: 24px; padding: 0 7px; border: 1px solid #0d0d0b; color: #0d0d0b; font: 900 7px/1 'JetBrains Mono', monospace; letter-spacing: .04em; }.save-contest-button:hover, .save-contest-button.is-saved { background: #2b1fcc; color: #fff; }
 .mode-label, .featured-label { display: inline-flex; width: fit-content; padding: 5px 7px; background: #0d0d0b; color: #e8e4d9; font: 900 7px/1 'JetBrains Mono', monospace; letter-spacing: .08em; }
 .mode-label.is-sponsored { background: #f0c040; color: #0d0d0b; }.featured-label { background: #e63b2e; }
 .contest-card h3 { margin-top: 13px; font-size: 24px; letter-spacing: -.05em; }.contest-card > p { min-height: 36px; margin-top: 6px; color: #646057; font-size: 11px; line-height: 1.5; }
@@ -117,7 +120,7 @@
   .lobby-main { padding: 14px 12px 30px; }
   .lobby-match { min-height: 148px; grid-template-columns: 1fr; padding: 20px; }.lobby-match h1 { max-width: 270px; font-size: 35px; }.match-countdown { display: none; }
   .lobby-welcome { padding-top: 24px; }.lobby-welcome p { display: none; }.welcome-actions { margin-left: auto; }
-  .contest-tabs { overflow-x: auto; }.contest-tabs button { flex: 1 0 auto; min-width: 112px; padding: 0 11px; }
+  .contest-tabs { overflow-x: auto; }.contest-tabs button { flex: 1 0 auto; min-width: 112px; padding: 0 11px; }.contest-discovery { grid-template-columns: 1fr; }
   .contest-list { grid-template-columns: 1fr; gap: 12px; }.contest-card h3 { font-size: 21px; }
   .live-matches-heading { align-items: flex-start; flex-direction: column; }.live-match-grid { grid-template-columns: 1fr; }.live-refresh-button { width: 100%; }.live-teams strong { font-size: 15px; }
   .private-panel { grid-template-columns: 1fr; }.private-intro, .invite-code-card { padding: 22px; }
