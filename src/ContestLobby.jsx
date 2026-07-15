@@ -405,6 +405,30 @@ function CreateRoomSheet({ open, pending, error, onClose, onCreate }) {
   );
 }
 
+function ScoringGuideSheet({ open, onClose }) {
+  const dialogRef = useDialogFocus(open, onClose);
+  if (!open) return null;
+
+  return (
+    <div className="sheet-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section ref={dialogRef} className="contest-sheet scoring-sheet" role="dialog" aria-modal="true" aria-labelledby="scoring-guide-title">
+        <button className="sheet-close" type="button" onClick={onClose} aria-label="Close scoring guide">×</button>
+        <span className="mode-label">THE JURY RULEBOOK</span>
+        <h2 id="scoring-guide-title">HOW SCORING WORKS</h2>
+        <p>Call each review before the official verdict. You score for being correct — never for picking first.</p>
+        <ol className="scoring-steps">
+          <li><b>01</b><div><strong>Make your call</strong><span>Choose STANDS or OVERTURNED while the decision window is open.</span></div></li>
+          <li><b>02</b><div><strong>Wait for the official result</strong><span>TxLINE marks the verified outcome and settles the call for everyone.</span></div></li>
+          <li><b>03</b><div><strong>Earn accuracy points</strong><span>Correct calls add to your contest total. A wrong call earns zero — there are no deductions.</span></div></li>
+        </ol>
+        <div className="scoring-tiebreak"><span>TIEBREAK</span><strong>Higher accuracy wins. If accuracy is tied, the earlier correct call ranks higher.</strong></div>
+        <p className="sheet-disclosure">Demo Credits and rewards are for the hackathon demo only. They have no cash value and cannot be withdrawn or redeemed.</p>
+        <button className="sheet-primary" type="button" onClick={onClose}>I’M READY TO CALL <span>→</span></button>
+      </section>
+    </div>
+  );
+}
+
 function BalanceSheet({ open, balance, onClose }) {
   const dialogRef = useDialogFocus(open, onClose);
   if (!open) return null;
@@ -446,6 +470,7 @@ export default function ContestLobby({
   const [lookupError, setLookupError] = useState("");
   const [balanceOpen, setBalanceOpen] = useState(false);
   const [buyPointsOpen, setBuyPointsOpen] = useState(false);
+  const [scoringOpen, setScoringOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
   const balance = wallet?.balanceCredits ?? 1000;
   const sharedEntryClosesAt = contests.find((contest) => contest.entryClosesAt)?.entryClosesAt;
@@ -531,7 +556,7 @@ export default function ContestLobby({
           <div className="match-countdown"><small>ALL CONTESTS</small><strong>{matchStatus}</strong><span>{matchStatus === "OPEN" ? sharedClock ? `Lock together in ${sharedClock}` : "First entry opens shared window" : "One authoritative match clock"}</span></div>
         </section>
 
-        <div className="lobby-welcome"><div><span>WELCOME BACK</span><h2>{nickname || "MATCHDAY JUROR"}</h2></div><p>Accuracy wins. Speed never breaks ties.</p></div>
+        <div className="lobby-welcome"><div><span>WELCOME BACK</span><h2>{nickname || "MATCHDAY JUROR"}</h2></div><div className="welcome-actions"><p>Accuracy wins. Speed never breaks ties.</p><button type="button" className="scoring-open" onClick={() => setScoringOpen(true)}>HOW SCORING WORKS <span>↗</span></button></div></div>
 
         <nav className="contest-tabs" aria-label="Contest categories" role="tablist">
           <button id="contest-tab-public" role="tab" aria-selected={tab === "public"} aria-controls="contest-panel-public" className={tab === "public" ? "is-active" : ""} type="button" onClick={() => setTab("public")}>PUBLIC</button>
@@ -561,6 +586,7 @@ export default function ContestLobby({
 
       <JoinContestSheet contest={selected} balance={balance} pending={joinPending} error={joinError} now={now} onClose={() => setSelected(null)} onConfirm={confirmJoin} onEnterLive={enterRoom} />
       <CreateRoomSheet open={createOpen} pending={createPending} error={createError} onClose={() => setCreateOpen(false)} onCreate={create} />
+      <ScoringGuideSheet open={scoringOpen} onClose={() => setScoringOpen(false)} />
       <BalanceSheet open={balanceOpen} balance={balance} onClose={() => setBalanceOpen(false)} />
     </div>
   );

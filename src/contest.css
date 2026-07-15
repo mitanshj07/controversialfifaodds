@@ -58,8 +58,9 @@
 .match-countdown { min-width: 146px; padding: 18px; border: 2px solid rgba(255,255,255,.55); background: rgba(13,13,11,.12); text-align: right; z-index: 2; }
 .match-countdown small, .match-countdown span { display: block; font: 800 7px/1 'JetBrains Mono', monospace; letter-spacing: .1em; }.match-countdown strong { display: block; margin: 9px 0; color: #c8f02d; font: 900 28px/1 'JetBrains Mono', monospace; }
 
-.lobby-welcome { display: flex; justify-content: space-between; align-items: flex-end; padding: 30px 0 18px; border-bottom: 1px solid #aaa59a; }
+.lobby-welcome { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; padding: 30px 0 18px; border-bottom: 1px solid #aaa59a; }
 .lobby-welcome h2 { margin-top: 7px; font: 900 22px/1 'JetBrains Mono', monospace; }.lobby-welcome p { color: #646057; font-size: 11px; }
+.welcome-actions { display: flex; align-items: center; gap: 14px; }.scoring-open { min-height: 32px; padding: 0 10px; border: 1px solid #0d0d0b; background: transparent; color: #0d0d0b; font: 900 7px/1 'JetBrains Mono', monospace; letter-spacing: .07em; white-space: nowrap; }.scoring-open span { color: #e63b2e; font-size: 11px; }.scoring-open:hover { background: #0d0d0b; color: #c8f02d; }
 .contest-tabs { height: 52px; display: flex; align-items: stretch; gap: 0; border-bottom: 2px solid #0d0d0b; }
 .contest-tabs button { min-width: 132px; padding: 0 16px; color: #646057; font: 900 9px/1 'JetBrains Mono', monospace; letter-spacing: .08em; border-left: 1px solid #aaa59a; }
 .contest-tabs button:last-child { border-right: 1px solid #aaa59a; }.contest-tabs button.is-active { background: #0d0d0b; color: #c8f02d; }
@@ -102,6 +103,7 @@
 .payout-preview { margin: 18px 0; }.payout-preview > span { display: block; margin-bottom: 7px; font: 900 8px/1 'JetBrains Mono', monospace; }.payout-preview > div { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px dashed #aaa59a; font-size: 10px; }.payout-preview strong { font-family: 'JetBrains Mono', monospace; }
 .private-code-block { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 16px; padding: 14px; background: #2b1fcc; color: white; }.private-code-block span { display: block; font: 800 7px/1 'JetBrains Mono', monospace; opacity: .7; }.private-code-block strong { display: block; margin-top: 7px; font: 900 19px/1 'JetBrains Mono', monospace; letter-spacing: .09em; }.private-code-block button { min-height: 38px; padding: 0 12px; border: 1px solid white; font: 900 8px/1 'JetBrains Mono', monospace; }
 .sheet-disclosure { margin: 18px 0 !important; padding: 12px; border-left: 5px solid #e63b2e; background: #e8e4d9; color: #3a3833 !important; }
+.scoring-steps { display: grid; gap: 0; margin: 21px 0 18px; padding: 0; list-style: none; border: 2px solid #0d0d0b; }.scoring-steps li { display: grid; grid-template-columns: 54px 1fr; gap: 12px; padding: 14px; border-bottom: 1px solid #aaa59a; }.scoring-steps li:last-child { border-bottom: 0; }.scoring-steps b { color: #e63b2e; font: 900 20px/1 'JetBrains Mono', monospace; }.scoring-steps strong, .scoring-steps span { display: block; }.scoring-steps strong { font: 900 11px/1.2 'JetBrains Mono', monospace; }.scoring-steps span { margin-top: 5px; color: #646057; font-size: 10px; line-height: 1.45; }.scoring-tiebreak { padding: 14px; background: #0d0d0b; color: #e8e4d9; }.scoring-tiebreak span { display: block; color: #c8f02d; font: 900 7px/1 'JetBrains Mono', monospace; letter-spacing: .1em; }.scoring-tiebreak strong { display: block; margin-top: 8px; font-size: 11px; line-height: 1.4; }
 .sheet-secondary { width: 100%; min-height: 42px; margin-top: 10px; color: #646057; font: 900 8px/1 'JetBrains Mono', monospace; }
 .contest-error { margin-top: 12px !important; color: #a22018 !important; font-weight: 800; }
 .field-label { display: block; margin-top: 18px; }.field-label input, .field-label select { margin-top: 8px; }
@@ -114,7 +116,7 @@
   .practice-strip { justify-content: flex-start; font-size: 8px; }
   .lobby-main { padding: 14px 12px 30px; }
   .lobby-match { min-height: 148px; grid-template-columns: 1fr; padding: 20px; }.lobby-match h1 { max-width: 270px; font-size: 35px; }.match-countdown { display: none; }
-  .lobby-welcome { padding-top: 24px; }.lobby-welcome p { display: none; }
+  .lobby-welcome { padding-top: 24px; }.lobby-welcome p { display: none; }.welcome-actions { margin-left: auto; }
   .contest-tabs { overflow-x: auto; }.contest-tabs button { flex: 1 0 auto; min-width: 112px; padding: 0 11px; }
   .contest-list { grid-template-columns: 1fr; gap: 12px; }.contest-card h3 { font-size: 21px; }
   .live-matches-heading { align-items: flex-start; flex-direction: column; }.live-match-grid { grid-template-columns: 1fr; }.live-refresh-button { width: 100%; }.live-teams strong { font-size: 15px; }
