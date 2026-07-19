@@ -306,13 +306,50 @@ function BuyPointsDialog({ open, onClose, onBuy }) {
 function LiveMatchesPanel({ data = {}, onRefresh }) {
   const matches = Array.isArray(data.matches) ? data.matches : [];
   const [filter, setFilter] = useState("all");
+  const [followedFixtureIds, setFollowedFixtureIds] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("the-call-followed-fixtures-v1") || "[]");
+      return Array.isArray(saved) ? saved.map(String) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [now, setNow] = useState(Date.now());
   const lastUpdated = data.fetchedAt ? new Date(data.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
   const providerLabel = data.provider === 'txodds' ? 'TXODDS' : 'TXLINE';
   const setup = data.setup || {};
   const missingCredentials = Array.isArray(setup.missing) ? setup.missing : [];
   const matchRank = (match) => ({ live: 0, scheduled: 1, completed: 2, cancelled: 3 }[match.status] ?? 4);
+  const followedMatches = matches.filter((match) => followedFixtureIds.includes(String(match.id)));
+  const nextFollowedMatch = [...followedMatches].filter((match) => match.status === "scheduled").sort((left, right) => new Date(left.startTime || 0).getTime() - new Date(right.startTime || 0).getTime())[0];
+  const kickoffLabel = (match) => {
+    if (!match?.startTime) return "Schedule pending";
+    const remaining = new Date(match.startTime).getTime() - now;
+    if (remaining <= 0) return "Kickoff imminent";
+    const totalMinutes = Math.floor(remaining / 60_000);
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    return days ? `Starts in ${days}d ${hours}h` : hours ? `Starts in ${hours}h ${minutes}m` : `Starts in ${minutes}m`;
+  };
+  const toggleFollowedFixture = (fixtureId) => {
+    const normalizedId = String(fixtureId);
+    setFollowedFixtureIds((current) => current.includes(normalizedId)
+      ? current.filter((id) => id !== normalizedId)
+      : [...current, normalizedId]);
+  };
+
+  useEffect(() => {
+    localStorage.setItem("the-call-followed-fixtures-v1", JSON.stringify(followedFixtureIds));
+  }, [followedFixtureIds]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const filteredMatches = matches
-    .filter((match) => filter === "all" || (filter === "live" ? match.live : match.status === "scheduled"))
+    .filter((match) => filter === "all" || (filter === "live" ? match.live : filter === "following" ? followedFixtureIds.includes(String(match.id)) : match.status === "scheduled"))
     .sort((left, right) => {
       const statusDifference = matchRank(left) - matchRank(right);
       if (statusDifference) return statusDifference;
@@ -322,7 +359,9 @@ function LiveMatchesPanel({ data = {}, onRefresh }) {
     ? matches.length
     : value === "live"
       ? matches.filter((match) => match.live).length
-      : matches.filter((match) => match.status === "scheduled").length;
+      : value === "following"
+        ? followedMatches.length
+        : matches.filter((match) => match.status === "scheduled").length;
 
   return (
     <section id="contest-panel-live" className="live-matches-panel" role="tabpanel" aria-labelledby="contest-tab-live">
@@ -330,6 +369,8 @@ function LiveMatchesPanel({ data = {}, onRefresh }) {
         <div><span className="section-kicker">PRIMARY FEED · {providerLabel}</span><h2>Match centre</h2><p>Upcoming and live fixtures are fetched server-side. No mock cards are mixed into this board.</p></div>
         <button type="button" className="live-refresh-button" onClick={onRefresh} disabled={data.loading}>{data.loading ? "UPDATING…" : "REFRESH ↻"}</button>
       </div>
+
+      {followedFixtureIds.length ? <div className="fixture-watch-banner"><span>YOUR MATCH WATCH</span><strong>{nextFollowedMatch ? `${nextFollowedMatch.home} vs ${nextFollowedMatch.away} · ${kickoffLabel(nextFollowedMatch)}` : `${followedFixtureIds.length} followed fixture${followedFixtureIds.length === 1 ? "" : "s"}`}</strong><button type="button" onClick={() => setFilter("following")}>VIEW WATCHLIST →</button></div> : null}
 
       {data.error ? <p className="contest-error" role="alert">{data.error}</p> : null}
       {!data.configured ? (
@@ -349,7 +390,7 @@ function LiveMatchesPanel({ data = {}, onRefresh }) {
       ) : (
         <>
           <div className="fixture-filter" role="tablist" aria-label="Fixture status">
-            {[['all', 'ALL'], ['upcoming', 'UPCOMING'], ['live', 'LIVE NOW']].map(([value, label]) => (
+            {[['all', 'ALL'], ['upcoming', 'UPCOMING'], ['live', 'LIVE NOW'], ['following', 'FOLLOWING']].map(([value, label]) => (
               <button key={value} type="button" role="tab" aria-selected={filter === value} className={filter === value ? 'is-active' : ''} onClick={() => setFilter(value)}>{label} <span>{filterCount(value)}</span></button>
             ))}
           </div>
@@ -360,6 +401,7 @@ function LiveMatchesPanel({ data = {}, onRefresh }) {
                 <p className="live-competition">{match.competition || "TxLINE fixture"}</p>
                 <div className="live-teams"><strong>{match.home}</strong><b>{match.homeScore ?? "—"}</b><span>–</span><b>{match.awayScore ?? "—"}</b><strong>{match.away}</strong></div>
                 <div className="live-match-meta"><span>{match.live && match.minute !== null ? `${match.minute}′` : match.startTime ? new Date(match.startTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : "Awaiting clock"}</span><span>{providerLabel} PRIMARY</span></div>
+                <div className="fixture-actions"><small>{match.status === "scheduled" ? kickoffLabel(match) : match.live ? "Decision windows may open at any time" : "Official match result received"}</small><button className={followedFixtureIds.includes(String(match.id)) ? "is-following" : ""} type="button" aria-pressed={followedFixtureIds.includes(String(match.id))} onClick={() => toggleFollowedFixture(match.id)}>{followedFixtureIds.includes(String(match.id)) ? "FOLLOWING ★" : "FOLLOW ☆"}</button></div>
               </article>
             ))}
           </div> : <div className="live-empty-state compact"><span className="mode-label">NO {filter.toUpperCase()} FIXTURES</span><h3>Try another view.</h3><p>The current snapshot has no fixtures matching this filter.</p></div>}
